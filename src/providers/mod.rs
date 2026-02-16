@@ -12,11 +12,13 @@ use std::fmt;
 mod claude;
 mod codex;
 mod cursor;
+mod factory;
 mod gemini;
 
 pub use claude::ClaudeProvider;
 pub use codex::CodexProvider;
 pub use cursor::CursorProvider;
+pub use factory::FactoryProvider;
 pub use gemini::GeminiProvider;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum)]
@@ -26,6 +28,9 @@ pub enum ProviderId {
     Claude,
     Gemini,
     Cursor,
+    #[serde(alias = "droid")]
+    #[value(alias = "droid")]
+    Factory,
 }
 
 impl fmt::Display for ProviderId {
@@ -35,6 +40,7 @@ impl fmt::Display for ProviderId {
             ProviderId::Claude => "claude",
             ProviderId::Gemini => "gemini",
             ProviderId::Cursor => "cursor",
+            ProviderId::Factory => "factory",
         };
         write!(f, "{}", label)
     }
@@ -69,6 +75,9 @@ impl fmt::Display for SourcePreference {
 pub trait Provider: Send + Sync {
     fn id(&self) -> ProviderId;
     fn version(&self) -> &'static str;
+    fn supports_token_accounts(&self) -> bool {
+        false
+    }
 
     async fn fetch_usage(
         &self,
@@ -76,6 +85,15 @@ pub trait Provider: Send + Sync {
         config: &Config,
         source: SourcePreference,
     ) -> Result<ProviderPayload>;
+
+    async fn fetch_usage_all(
+        &self,
+        args: &UsageArgs,
+        config: &Config,
+        source: SourcePreference,
+    ) -> Result<Vec<ProviderPayload>> {
+        Ok(vec![self.fetch_usage(args, config, source).await?])
+    }
 
     async fn fetch_cost(&self, _args: &CostArgs, _config: &Config) -> Result<ProviderPayload> {
         Err(CliError::ProviderNotImplemented(self.id()).into())
@@ -117,6 +135,7 @@ impl ProviderRegistry {
         providers.insert(ProviderId::Claude, Box::new(ClaudeProvider));
         providers.insert(ProviderId::Gemini, Box::new(GeminiProvider));
         providers.insert(ProviderId::Cursor, Box::new(CursorProvider));
+        providers.insert(ProviderId::Factory, Box::new(FactoryProvider));
         Self { providers }
     }
 
