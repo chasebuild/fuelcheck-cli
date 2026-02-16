@@ -18,6 +18,7 @@ mod gemini;
 mod utils;
 mod zai;
 mod minimax;
+mod kimi;
 
 pub use claude::ClaudeProvider;
 pub use codex::CodexProvider;
@@ -26,6 +27,7 @@ pub use factory::FactoryProvider;
 pub use gemini::GeminiProvider;
 pub use zai::ZaiProvider;
 pub use minimax::MiniMaxProvider;
+pub use kimi::KimiProvider;
 pub(crate) use utils::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum)]
@@ -40,6 +42,7 @@ pub enum ProviderId {
     Factory,
     Zai,
     MiniMax,
+    Kimi,
 }
 
 impl fmt::Display for ProviderId {
@@ -52,6 +55,7 @@ impl fmt::Display for ProviderId {
             ProviderId::Factory => "factory",
             ProviderId::Zai => "zai",
             ProviderId::MiniMax => "minimax",
+            ProviderId::Kimi => "kimi",
         };
         write!(f, "{}", label)
     }
@@ -67,6 +71,7 @@ impl ProviderId {
             ProviderId::Factory,
             ProviderId::Zai,
             ProviderId::MiniMax,
+            ProviderId::Kimi,
         ]
     }
 }
@@ -81,6 +86,7 @@ pub enum ProviderSelector {
     Factory,
     Zai,
     MiniMax,
+    Kimi,
     All,
     Both,
 }
@@ -97,6 +103,7 @@ impl ProviderSelector {
             ProviderSelector::Factory => vec![ProviderId::Factory],
             ProviderSelector::Zai => vec![ProviderId::Zai],
             ProviderSelector::MiniMax => vec![ProviderId::MiniMax],
+            ProviderSelector::Kimi => vec![ProviderId::Kimi],
         }
     }
 }
@@ -111,6 +118,7 @@ impl fmt::Display for ProviderSelector {
             ProviderSelector::Factory => "factory",
             ProviderSelector::Zai => "zai",
             ProviderSelector::MiniMax => "minimax",
+            ProviderSelector::Kimi => "kimi",
             ProviderSelector::All => "all",
             ProviderSelector::Both => "both",
         };
@@ -227,6 +235,7 @@ impl ProviderRegistry {
         providers.insert(ProviderId::Factory, Box::new(FactoryProvider));
         providers.insert(ProviderId::Zai, Box::new(ZaiProvider));
         providers.insert(ProviderId::MiniMax, Box::new(MiniMaxProvider));
+        providers.insert(ProviderId::Kimi, Box::new(KimiProvider));
         Self { providers }
     }
 
