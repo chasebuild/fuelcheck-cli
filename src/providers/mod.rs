@@ -26,6 +26,7 @@ mod vertexai;
 mod jetbrains;
 mod amp;
 mod warp;
+mod opencode;
 
 pub use claude::ClaudeProvider;
 pub use codex::CodexProvider;
@@ -42,6 +43,7 @@ pub use vertexai::VertexAIProvider;
 pub use jetbrains::JetBrainsProvider;
 pub use amp::AmpProvider;
 pub use warp::WarpProvider;
+pub use opencode::OpenCodeProvider;
 pub(crate) use utils::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum)]
@@ -65,6 +67,7 @@ pub enum ProviderId {
     JetBrains,
     Amp,
     Warp,
+    OpenCode,
 }
 
 impl fmt::Display for ProviderId {
@@ -85,6 +88,7 @@ impl fmt::Display for ProviderId {
             ProviderId::JetBrains => "jetbrains",
             ProviderId::Amp => "amp",
             ProviderId::Warp => "warp",
+            ProviderId::OpenCode => "opencode",
         };
         write!(f, "{}", label)
     }
@@ -108,6 +112,7 @@ impl ProviderId {
             ProviderId::JetBrains,
             ProviderId::Amp,
             ProviderId::Warp,
+            ProviderId::OpenCode,
         ]
     }
 }
@@ -131,6 +136,7 @@ pub enum ProviderSelector {
     JetBrains,
     Amp,
     Warp,
+    OpenCode,
     All,
     Both,
 }
@@ -155,6 +161,7 @@ impl ProviderSelector {
             ProviderSelector::JetBrains => vec![ProviderId::JetBrains],
             ProviderSelector::Amp => vec![ProviderId::Amp],
             ProviderSelector::Warp => vec![ProviderId::Warp],
+            ProviderSelector::OpenCode => vec![ProviderId::OpenCode],
         }
     }
 }
@@ -177,6 +184,7 @@ impl fmt::Display for ProviderSelector {
             ProviderSelector::JetBrains => "jetbrains",
             ProviderSelector::Amp => "amp",
             ProviderSelector::Warp => "warp",
+            ProviderSelector::OpenCode => "opencode",
             ProviderSelector::All => "all",
             ProviderSelector::Both => "both",
         };
@@ -301,6 +309,7 @@ impl ProviderRegistry {
         providers.insert(ProviderId::JetBrains, Box::new(JetBrainsProvider));
         providers.insert(ProviderId::Amp, Box::new(AmpProvider));
         providers.insert(ProviderId::Warp, Box::new(WarpProvider));
+        providers.insert(ProviderId::OpenCode, Box::new(OpenCodeProvider));
         Self { providers }
     }
 
