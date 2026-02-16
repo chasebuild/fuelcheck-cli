@@ -8,6 +8,7 @@ use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
+use std::time::Duration;
 
 mod claude;
 mod codex;
@@ -44,6 +45,72 @@ impl fmt::Display for ProviderId {
         };
         write!(f, "{}", label)
     }
+}
+
+impl ProviderId {
+    pub fn ordered() -> Vec<ProviderId> {
+        vec![
+            ProviderId::Codex,
+            ProviderId::Claude,
+            ProviderId::Gemini,
+            ProviderId::Cursor,
+            ProviderId::Factory,
+        ]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum)]
+pub enum ProviderSelector {
+    Codex,
+    Claude,
+    Gemini,
+    Cursor,
+    #[value(alias = "droid")]
+    Factory,
+    All,
+    Both,
+}
+
+impl ProviderSelector {
+    pub fn expand(self) -> Vec<ProviderId> {
+        match self {
+            ProviderSelector::All => ProviderId::ordered(),
+            ProviderSelector::Both => vec![ProviderId::Codex, ProviderId::Claude],
+            ProviderSelector::Codex => vec![ProviderId::Codex],
+            ProviderSelector::Claude => vec![ProviderId::Claude],
+            ProviderSelector::Gemini => vec![ProviderId::Gemini],
+            ProviderSelector::Cursor => vec![ProviderId::Cursor],
+            ProviderSelector::Factory => vec![ProviderId::Factory],
+        }
+    }
+}
+
+impl fmt::Display for ProviderSelector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let label = match self {
+            ProviderSelector::Codex => "codex",
+            ProviderSelector::Claude => "claude",
+            ProviderSelector::Gemini => "gemini",
+            ProviderSelector::Cursor => "cursor",
+            ProviderSelector::Factory => "factory",
+            ProviderSelector::All => "all",
+            ProviderSelector::Both => "both",
+        };
+        write!(f, "{}", label)
+    }
+}
+
+pub fn expand_provider_selectors(selectors: &[ProviderSelector]) -> Vec<ProviderId> {
+    let mut ordered = Vec::new();
+    let mut seen: std::collections::HashSet<ProviderId> = std::collections::HashSet::new();
+    for selector in selectors {
+        for provider in selector.expand() {
+            if seen.insert(provider) {
+                ordered.push(provider);
+            }
+        }
+    }
+    ordered
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
@@ -99,7 +166,11 @@ pub trait Provider: Send + Sync {
         Err(CliError::ProviderNotImplemented(self.id()).into())
     }
 
-    fn resolve_source(&self, config: Option<ProviderConfig>, source: SourcePreference) -> SourcePreference {
+    fn resolve_source(
+        &self,
+        config: Option<ProviderConfig>,
+        source: SourcePreference,
+    ) -> SourcePreference {
         match source {
             SourcePreference::Auto => config
                 .and_then(|cfg| cfg.source)
@@ -144,9 +215,15 @@ impl ProviderRegistry {
     }
 }
 
-pub async fn fetch_status_payload(base_url: &str) -> Option<crate::model::ProviderStatusPayload> {
+pub async fn fetch_status_payload(
+    base_url: &str,
+    timeout_secs: u64,
+) -> Option<crate::model::ProviderStatusPayload> {
     let api_url = format!("{}/api/v2/status.json", base_url.trim_end_matches('/'));
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(timeout_secs.max(1)))
+        .build()
+        .ok()?;
     let resp = client.get(api_url).send().await.ok()?;
     let status = resp.status();
     if !status.is_success() {
@@ -195,4 +272,38 @@ pub async fn fetch_status_payload(base_url: &str) -> Option<crate::model::Provid
         updated_at,
         url: base_url.to_string(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expand_provider_selectors_all() {
+        let expanded = expand_provider_selectors(&[ProviderSelector::All]);
+        assert_eq!(expanded, ProviderId::ordered());
+    }
+
+    #[test]
+    fn expand_provider_selectors_both_plus_extra() {
+        let expanded =
+            expand_provider_selectors(&[ProviderSelector::Both, ProviderSelector::Gemini]);
+        assert_eq!(
+            expanded,
+            vec![ProviderId::Codex, ProviderId::Claude, ProviderId::Gemini]
+        );
+    }
+
+    #[test]
+    fn expand_provider_selectors_dedup_preserves_order() {
+        let expanded = expand_provider_selectors(&[
+            ProviderSelector::Gemini,
+            ProviderSelector::Both,
+            ProviderSelector::Gemini,
+        ]);
+        assert_eq!(
+            expanded,
+            vec![ProviderId::Gemini, ProviderId::Codex, ProviderId::Claude]
+        );
+    }
 }
