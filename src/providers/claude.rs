@@ -14,7 +14,6 @@ use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use std::process::Command;
 
 pub struct ClaudeProvider;
 

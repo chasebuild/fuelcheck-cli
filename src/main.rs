@@ -1,6 +1,5 @@
 mod accounts;
 mod cli;
-mod accounts;
 mod config;
 mod errors;
 mod logger;
