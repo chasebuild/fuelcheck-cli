@@ -33,7 +33,9 @@ impl TuiTheme {
     }
 
     fn accent_bold(self) -> Style {
-        Style::default().fg(self.accent).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(self.accent)
+            .add_modifier(Modifier::BOLD)
     }
 
     fn dim_style(self) -> Style {
@@ -359,10 +361,7 @@ fn render_payload(
     lines
 }
 
-fn provider_header(
-    payload: &ProviderPayload,
-    theme: TuiTheme,
-) -> Line<'static> {
+fn provider_header(payload: &ProviderPayload, theme: TuiTheme) -> Line<'static> {
     let header_style = theme.accent_bold();
     let dim_style = theme.dim_style();
     let mut label = payload.provider.clone();
