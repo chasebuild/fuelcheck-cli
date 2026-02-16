@@ -15,12 +15,16 @@ mod codex;
 mod cursor;
 mod factory;
 mod gemini;
+mod utils;
+mod zai;
 
 pub use claude::ClaudeProvider;
 pub use codex::CodexProvider;
 pub use cursor::CursorProvider;
 pub use factory::FactoryProvider;
 pub use gemini::GeminiProvider;
+pub use zai::ZaiProvider;
+pub(crate) use utils::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
@@ -32,6 +36,7 @@ pub enum ProviderId {
     #[serde(alias = "droid")]
     #[value(alias = "droid")]
     Factory,
+    Zai,
 }
 
 impl fmt::Display for ProviderId {
@@ -42,6 +47,7 @@ impl fmt::Display for ProviderId {
             ProviderId::Gemini => "gemini",
             ProviderId::Cursor => "cursor",
             ProviderId::Factory => "factory",
+            ProviderId::Zai => "zai",
         };
         write!(f, "{}", label)
     }
@@ -55,6 +61,7 @@ impl ProviderId {
             ProviderId::Gemini,
             ProviderId::Cursor,
             ProviderId::Factory,
+            ProviderId::Zai,
         ]
     }
 }
@@ -67,6 +74,7 @@ pub enum ProviderSelector {
     Cursor,
     #[value(alias = "droid")]
     Factory,
+    Zai,
     All,
     Both,
 }
@@ -81,6 +89,7 @@ impl ProviderSelector {
             ProviderSelector::Gemini => vec![ProviderId::Gemini],
             ProviderSelector::Cursor => vec![ProviderId::Cursor],
             ProviderSelector::Factory => vec![ProviderId::Factory],
+            ProviderSelector::Zai => vec![ProviderId::Zai],
         }
     }
 }
@@ -93,6 +102,7 @@ impl fmt::Display for ProviderSelector {
             ProviderSelector::Gemini => "gemini",
             ProviderSelector::Cursor => "cursor",
             ProviderSelector::Factory => "factory",
+            ProviderSelector::Zai => "zai",
             ProviderSelector::All => "all",
             ProviderSelector::Both => "both",
         };
@@ -207,6 +217,7 @@ impl ProviderRegistry {
         providers.insert(ProviderId::Gemini, Box::new(GeminiProvider));
         providers.insert(ProviderId::Cursor, Box::new(CursorProvider));
         providers.insert(ProviderId::Factory, Box::new(FactoryProvider));
+        providers.insert(ProviderId::Zai, Box::new(ZaiProvider));
         Self { providers }
     }
 
