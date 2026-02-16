@@ -1,12 +1,12 @@
-use crate::accounts::{account_label, select_accounts, AccountSelectionArgs};
+use crate::accounts::{AccountSelectionArgs, account_label, select_accounts};
 use crate::cli::UsageArgs;
 use crate::config::{Config, TokenAccount};
 use crate::errors::CliError;
 use crate::model::{
     ProviderCostSnapshot, ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot,
 };
-use crate::providers::{Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use crate::providers::{Provider, ProviderId, SourcePreference, fetch_status_payload};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -39,7 +39,10 @@ impl Provider for CursorProvider {
             account_index: args.account_index.map(|idx| idx.saturating_sub(1)),
             all_accounts: args.all_accounts,
         };
-        let selected = select_accounts(cfg.as_ref().and_then(|c| c.token_accounts.as_ref()), &selection)?;
+        let selected = select_accounts(
+            cfg.as_ref().and_then(|c| c.token_accounts.as_ref()),
+            &selection,
+        )?;
         let Some(selected) = selected else {
             return Ok(vec![self.fetch_usage(args, config, source).await?]);
         };
@@ -57,15 +60,22 @@ impl Provider for CursorProvider {
             _ => {
                 return Err(
                     CliError::UnsupportedSource(self.id(), selected_source.to_string()).into(),
-                )
+                );
             }
         }
+
+        let status = if args.status {
+            fetch_status_payload("https://status.cursor.com", args.web_timeout).await
+        } else {
+            None
+        };
 
         let mut outputs = Vec::new();
         for account in selected {
             let cookie_header = token_account_cookie(&account.account, account.index)?;
             let usage = fetch_cursor_usage(&cookie_header).await?;
             let mut payload = self.ok_output(source_label, Some(usage));
+            payload.status = status.clone();
             payload.account = Some(account_label(&account.account, account.index));
             outputs.push(payload);
         }
@@ -75,7 +85,7 @@ impl Provider for CursorProvider {
 
     async fn fetch_usage(
         &self,
-        _args: &UsageArgs,
+        args: &UsageArgs,
         config: &Config,
         source: SourcePreference,
     ) -> Result<ProviderPayload> {
@@ -84,17 +94,27 @@ impl Provider for CursorProvider {
             .as_ref()
             .and_then(|c| c.cookie_header.clone())
             .or_else(|| std::env::var("CURSOR_COOKIE").ok())
-            .ok_or_else(|| anyhow!("Cursor cookie header missing. Set provider cookie_header in config."))?;
+            .ok_or_else(|| {
+                anyhow!("Cursor cookie header missing. Set provider cookie_header in config.")
+            })?;
 
         let selected = match source {
             SourcePreference::Auto => SourcePreference::Web,
             other => other,
         };
 
+        let status = if args.status {
+            fetch_status_payload("https://status.cursor.com", args.web_timeout).await
+        } else {
+            None
+        };
+
         match selected {
             SourcePreference::Web | SourcePreference::Api => {
                 let usage = fetch_cursor_usage(&cookie_header).await?;
-                Ok(self.ok_output("web", Some(usage)))
+                let mut payload = self.ok_output("web", Some(usage));
+                payload.status = status;
+                Ok(payload)
             }
             _ => Err(CliError::UnsupportedSource(self.id(), selected.to_string()).into()),
         }

@@ -1,19 +1,19 @@
-use crate::accounts::{account_label, select_accounts, AccountSelectionArgs};
+use crate::accounts::{AccountSelectionArgs, account_label, select_accounts};
 use crate::cli::UsageArgs;
 use crate::config::{Config, TokenAccount};
 use crate::errors::CliError;
 use crate::model::{
     ProviderCostSnapshot, ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot,
 };
-use crate::providers::{fetch_status_payload, Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use crate::providers::{Provider, ProviderId, SourcePreference, fetch_status_payload};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use directories::BaseDirs;
 use serde::Deserialize;
 use std::fs;
-use std::process::Command;
 use std::path::PathBuf;
+use std::process::Command;
 
 pub struct ClaudeProvider;
 
@@ -43,7 +43,10 @@ impl Provider for ClaudeProvider {
             account_index: args.account_index.map(|idx| idx.saturating_sub(1)),
             all_accounts: args.all_accounts,
         };
-        let selected = select_accounts(cfg.as_ref().and_then(|c| c.token_accounts.as_ref()), &selection)?;
+        let selected = select_accounts(
+            cfg.as_ref().and_then(|c| c.token_accounts.as_ref()),
+            &selection,
+        )?;
         let Some(selected) = selected else {
             return Ok(vec![self.fetch_usage(args, config, source).await?]);
         };
@@ -58,14 +61,15 @@ impl Provider for ClaudeProvider {
         }
 
         let status = if args.status {
-            fetch_status_payload("https://status.claude.com").await
+            fetch_status_payload("https://status.claude.com", args.web_timeout).await
         } else {
             None
         };
 
         let mut outputs = Vec::new();
         for account in selected {
-            let creds = ClaudeOAuthCredentials::from_token_account(&account.account, account.index)?;
+            let creds =
+                ClaudeOAuthCredentials::from_token_account(&account.account, account.index)?;
             let usage = fetch_claude_oauth_usage_with_creds(&creds).await?;
             let mut payload = self.ok_output("oauth", Some(usage));
             payload.status = status.clone();
@@ -106,7 +110,7 @@ impl Provider for ClaudeProvider {
         };
 
         let status = if args.status {
-            fetch_status_payload("https://status.claude.com").await
+            fetch_status_payload("https://status.claude.com", args.web_timeout).await
         } else {
             None
         };
@@ -131,9 +135,15 @@ impl Provider for ClaudeProvider {
                 payload.status = status;
                 Ok(payload)
             }
-            SourcePreference::Api => Err(CliError::UnsupportedSource(self.id(), "api".into()).into()),
-            SourcePreference::Local => Err(CliError::UnsupportedSource(self.id(), "local".into()).into()),
-            SourcePreference::Auto => Err(CliError::UnsupportedSource(self.id(), "auto".into()).into()),
+            SourcePreference::Api => {
+                Err(CliError::UnsupportedSource(self.id(), "api".into()).into())
+            }
+            SourcePreference::Local => {
+                Err(CliError::UnsupportedSource(self.id(), "local".into()).into())
+            }
+            SourcePreference::Auto => {
+                Err(CliError::UnsupportedSource(self.id(), "auto".into()).into())
+            }
         }
     }
 }
@@ -205,7 +215,9 @@ impl ClaudeOAuthCredentials {
 
     fn parse(data: Vec<u8>) -> Result<Self> {
         let root: ClaudeCredentialsFile = serde_json::from_slice(&data)?;
-        let oauth = root.claude_ai_oauth.ok_or_else(|| anyhow!("Claude OAuth missing"))?;
+        let oauth = root
+            .claude_ai_oauth
+            .ok_or_else(|| anyhow!("Claude OAuth missing"))?;
         let access_token = oauth
             .access_token
             .ok_or_else(|| anyhow!("Claude OAuth missing access token"))?;
@@ -236,10 +248,17 @@ fn claude_credentials_file_exists() -> bool {
 
 fn load_claude_keychain_credentials() -> Result<Vec<u8>> {
     if !cfg!(target_os = "macos") {
-        return Err(anyhow!("Claude OAuth keychain read is only supported on macOS"));
+        return Err(anyhow!(
+            "Claude OAuth keychain read is only supported on macOS"
+        ));
     }
     let output = Command::new("security")
-        .args(["find-generic-password", "-s", "Claude Code-credentials", "-w"])
+        .args([
+            "find-generic-password",
+            "-s",
+            "Claude Code-credentials",
+            "-w",
+        ])
         .output()?;
     if !output.status.success() {
         return Err(anyhow!("Claude OAuth keychain entry not found"));
@@ -349,7 +368,9 @@ async fn fetch_claude_oauth_usage() -> Result<UsageSnapshot> {
     let mut creds = ClaudeOAuthCredentials::load()?;
     if creds.is_expired() {
         if let Some(refresh_token) = creds.refresh_token.clone() {
-            if let Ok(updated) = refresh_claude_token(&refresh_token, &creds.scopes, creds.rate_limit_tier.clone()).await
+            if let Ok(updated) =
+                refresh_claude_token(&refresh_token, &creds.scopes, creds.rate_limit_tier.clone())
+                    .await
             {
                 creds = updated;
             }
@@ -358,7 +379,9 @@ async fn fetch_claude_oauth_usage() -> Result<UsageSnapshot> {
     fetch_claude_oauth_usage_with_creds(&creds).await
 }
 
-async fn fetch_claude_oauth_usage_with_creds(creds: &ClaudeOAuthCredentials) -> Result<UsageSnapshot> {
+async fn fetch_claude_oauth_usage_with_creds(
+    creds: &ClaudeOAuthCredentials,
+) -> Result<UsageSnapshot> {
     let usage = claude_oauth_fetch(&creds.access_token).await?;
     map_claude_usage(&usage, creds)
 }
@@ -435,7 +458,9 @@ async fn claude_oauth_fetch(access_token: &str) -> Result<OAuthUsageResponse> {
     let status = resp.status();
     let data = resp.bytes().await?;
     if status.as_u16() == 401 {
-        return Err(anyhow!("Claude OAuth unauthorized. Run `claude` to re-authenticate."));
+        return Err(anyhow!(
+            "Claude OAuth unauthorized. Run `claude` to re-authenticate."
+        ));
     }
     if !status.is_success() {
         return Err(anyhow!(
@@ -447,12 +472,18 @@ async fn claude_oauth_fetch(access_token: &str) -> Result<OAuthUsageResponse> {
     Ok(usage)
 }
 
-fn map_claude_usage(usage: &OAuthUsageResponse, creds: &ClaudeOAuthCredentials) -> Result<UsageSnapshot> {
+fn map_claude_usage(
+    usage: &OAuthUsageResponse,
+    creds: &ClaudeOAuthCredentials,
+) -> Result<UsageSnapshot> {
     let primary = make_window(usage.five_hour.as_ref(), 5 * 60)
         .ok_or_else(|| anyhow!("missing session data"))?;
     let weekly = make_window(usage.seven_day.as_ref(), 7 * 24 * 60);
     let model_specific = make_window(
-        usage.seven_day_sonnet.as_ref().or(usage.seven_day_opus.as_ref()),
+        usage
+            .seven_day_sonnet
+            .as_ref()
+            .or(usage.seven_day_opus.as_ref()),
         7 * 24 * 60,
     );
 
@@ -496,7 +527,10 @@ fn make_window(window: Option<&OAuthUsageWindow>, minutes: i64) -> Option<RateWi
     })
 }
 
-fn oauth_extra_usage_cost(extra: Option<&OAuthExtraUsage>, login_method: Option<&str>) -> Option<ProviderCostSnapshot> {
+fn oauth_extra_usage_cost(
+    extra: Option<&OAuthExtraUsage>,
+    login_method: Option<&str>,
+) -> Option<ProviderCostSnapshot> {
     let extra = extra?;
     if extra.is_enabled != Some(true) {
         return None;
@@ -527,14 +561,23 @@ async fn fetch_claude_web_usage(cookie_header: &str) -> Result<UsageSnapshot> {
     let cookie_header = normalize_claude_cookie_header(cookie_header);
     let org = claude_web_fetch_org(&cookie_header).await?;
     let usage = claude_web_fetch_usage(&org.uuid, &cookie_header).await?;
-    let extra = claude_web_fetch_overage(&org.uuid, &cookie_header).await.ok().flatten();
-    let account = claude_web_fetch_account(&cookie_header, Some(&org.uuid)).await.ok().flatten();
+    let extra = claude_web_fetch_overage(&org.uuid, &cookie_header)
+        .await
+        .ok()
+        .flatten();
+    let account = claude_web_fetch_account(&cookie_header, Some(&org.uuid))
+        .await
+        .ok()
+        .flatten();
 
     let primary = make_web_window(usage.five_hour.as_ref(), 5 * 60)
         .ok_or_else(|| anyhow!("missing session data"))?;
     let weekly = make_web_window(usage.seven_day.as_ref(), 7 * 24 * 60);
     let model_specific = make_web_window(
-        usage.seven_day_sonnet.as_ref().or(usage.seven_day_opus.as_ref()),
+        usage
+            .seven_day_sonnet
+            .as_ref()
+            .or(usage.seven_day_opus.as_ref()),
         7 * 24 * 60,
     );
 
@@ -584,7 +627,8 @@ async fn claude_web_fetch_org(cookie_header: &str) -> Result<WebOrganizationResp
         ));
     }
     let orgs: Vec<WebOrganizationResponse> = serde_json::from_slice(&data)?;
-    let selected = select_claude_org(&orgs).ok_or_else(|| anyhow!("Claude web organization missing"))?;
+    let selected =
+        select_claude_org(&orgs).ok_or_else(|| anyhow!("Claude web organization missing"))?;
     Ok(selected)
 }
 
@@ -617,7 +661,10 @@ async fn claude_web_fetch_overage(
     org_id: &str,
     cookie_header: &str,
 ) -> Result<Option<ProviderCostSnapshot>> {
-    let url = format!("https://claude.ai/api/organizations/{}/overage_spend_limit", org_id);
+    let url = format!(
+        "https://claude.ai/api/organizations/{}/overage_spend_limit",
+        org_id
+    );
     let client = reqwest::Client::new();
     let resp = client
         .get(url)
@@ -714,8 +761,7 @@ fn select_claude_org(orgs: &[WebOrganizationResponse]) -> Option<WebOrganization
                 .capabilities
                 .as_ref()
                 .map(|caps| {
-                    let normalized: Vec<String> =
-                        caps.iter().map(|c| c.to_lowercase()).collect();
+                    let normalized: Vec<String> = caps.iter().map(|c| c.to_lowercase()).collect();
                     !normalized.is_empty() && normalized.iter().all(|c| c == "api")
                 })
                 .unwrap_or(false);
@@ -747,10 +793,7 @@ fn select_claude_membership<'a>(
 fn make_web_window(window: Option<&WebUsageWindow>, minutes: i64) -> Option<RateWindow> {
     let window = window?;
     let utilization = window.utilization?;
-    let resets_at = window
-        .resets_at
-        .as_ref()
-        .and_then(|raw| parse_rfc3339(raw));
+    let resets_at = window.resets_at.as_ref().and_then(|raw| parse_rfc3339(raw));
     let reset_description = resets_at.map(format_reset_description);
     Some(RateWindow {
         used_percent: utilization,

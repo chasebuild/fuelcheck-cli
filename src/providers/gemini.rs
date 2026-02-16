@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::errors::CliError;
 use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot};
 use crate::providers::{Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use base64::Engine;
 use chrono::{DateTime, Utc};
@@ -41,10 +41,15 @@ impl Provider for GeminiProvider {
                 let usage = fetch_gemini_usage().await?;
                 Ok(self.ok_output("api", Some(usage)))
             }
-            SourcePreference::Local | SourcePreference::Cli | SourcePreference::Web | SourcePreference::Oauth => {
+            SourcePreference::Local
+            | SourcePreference::Cli
+            | SourcePreference::Web
+            | SourcePreference::Oauth => {
                 Err(CliError::UnsupportedSource(self.id(), selected.to_string()).into())
             }
-            SourcePreference::Auto => Err(CliError::UnsupportedSource(self.id(), "auto".into()).into()),
+            SourcePreference::Auto => {
+                Err(CliError::UnsupportedSource(self.id(), "auto".into()).into())
+            }
         }
     }
 }
@@ -111,7 +116,9 @@ async fn fetch_gemini_usage() -> Result<UsageSnapshot> {
 
     let mut creds = load_oauth_credentials()?;
     if creds.access_token.is_none() {
-        return Err(anyhow!("Gemini not logged in. Run `gemini` to authenticate."));
+        return Err(anyhow!(
+            "Gemini not logged in. Run `gemini` to authenticate."
+        ));
     }
     if let Some(expiry) = creds.expiry_date {
         if expiry < Utc::now() {
@@ -122,9 +129,14 @@ async fn fetch_gemini_usage() -> Result<UsageSnapshot> {
         }
     }
 
-    let access_token = creds.access_token.clone().ok_or_else(|| anyhow!("missing access token"))?;
+    let access_token = creds
+        .access_token
+        .clone()
+        .ok_or_else(|| anyhow!("missing access token"))?;
     let claims = extract_claims(creds.id_token.as_deref());
-    let code_assist = load_code_assist(&access_token).await.unwrap_or((None, None));
+    let code_assist = load_code_assist(&access_token)
+        .await
+        .unwrap_or((None, None));
     let project_id = if code_assist.1.is_some() {
         code_assist.1
     } else {
@@ -164,9 +176,18 @@ fn load_oauth_credentials() -> Result<OAuthCredentials> {
     }
     let data = fs::read(&path)?;
     let json: serde_json::Value = serde_json::from_slice(&data)?;
-    let access_token = json.get("access_token").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let id_token = json.get("id_token").and_then(|v| v.as_str()).map(|s| s.to_string());
-    let refresh_token = json.get("refresh_token").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let access_token = json
+        .get("access_token")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let id_token = json
+        .get("id_token")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let refresh_token = json
+        .get("refresh_token")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let expiry_date = json
         .get("expiry_date")
         .and_then(|v| v.as_f64())
@@ -204,7 +225,10 @@ async fn refresh_access_token(refresh_token: &str) -> Result<String> {
     let status = resp.status();
     let data = resp.bytes().await?;
     if !status.is_success() {
-        return Err(anyhow!("Gemini token refresh failed (HTTP {})", status.as_u16()));
+        return Err(anyhow!(
+            "Gemini token refresh failed (HTTP {})",
+            status.as_u16()
+        ));
     }
     let json: serde_json::Value = serde_json::from_slice(&data)?;
     let token = json
@@ -217,8 +241,12 @@ async fn refresh_access_token(refresh_token: &str) -> Result<String> {
 fn extract_oauth_client() -> Result<(String, String)> {
     let gemini_path = which("gemini").ok_or_else(|| anyhow!("gemini CLI not found on PATH"))?;
     let real_path = std::fs::read_link(&gemini_path).unwrap_or(gemini_path.clone());
-    let bin_dir = real_path.parent().ok_or_else(|| anyhow!("gemini path invalid"))?;
-    let base_dir = bin_dir.parent().ok_or_else(|| anyhow!("gemini path invalid"))?;
+    let bin_dir = real_path
+        .parent()
+        .ok_or_else(|| anyhow!("gemini path invalid"))?;
+    let base_dir = bin_dir
+        .parent()
+        .ok_or_else(|| anyhow!("gemini path invalid"))?;
 
     let oauth_paths = vec![
         base_dir.join("libexec/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js"),
@@ -298,7 +326,11 @@ async fn discover_project_id(access_token: &str) -> Result<Option<String>> {
     }
     let data = resp.bytes().await?;
     let json: serde_json::Value = serde_json::from_slice(&data)?;
-    let projects = json.get("projects").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let projects = json
+        .get("projects")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
     for project in projects {
         if let Some(project_id) = project.get("projectId").and_then(|v| v.as_str()) {
             if project_id.starts_with("gen-lang-client") {
@@ -342,7 +374,8 @@ fn parse_quota(response: QuotaResponse, email: Option<String>) -> Result<UsageSn
         .buckets
         .ok_or_else(|| anyhow!("Gemini quota response missing buckets"))?;
 
-    let mut model_map: std::collections::BTreeMap<String, (f64, Option<String>)> = std::collections::BTreeMap::new();
+    let mut model_map: std::collections::BTreeMap<String, (f64, Option<String>)> =
+        std::collections::BTreeMap::new();
     for bucket in buckets {
         let model_id = match bucket.model_id {
             Some(v) => v,
@@ -352,7 +385,9 @@ fn parse_quota(response: QuotaResponse, email: Option<String>) -> Result<UsageSn
             Some(v) => v,
             None => continue,
         };
-        let entry = model_map.entry(model_id).or_insert((fraction, bucket.reset_time.clone()));
+        let entry = model_map
+            .entry(model_id)
+            .or_insert((fraction, bucket.reset_time.clone()));
         if fraction < entry.0 {
             *entry = (fraction, bucket.reset_time.clone());
         }
@@ -443,18 +478,24 @@ fn extract_claims(id_token: Option<&str>) -> (Option<String>, Option<String>) {
     if parts.len() < 2 {
         return (None, None);
     }
-    let payload = parts[1]
-        .replace('-', "+")
-        .replace('_', "/");
+    let payload = parts[1].replace('-', "+").replace('_', "/");
     let padded = match payload.len() % 4 {
         0 => payload,
         rem => format!("{}{}", payload, "=".repeat(4 - rem)),
     };
-    let decoded = base64::engine::general_purpose::STANDARD.decode(padded).ok();
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(padded)
+        .ok();
     if let Some(decoded) = decoded {
         if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&decoded) {
-            let email = json.get("email").and_then(|v| v.as_str()).map(|s| s.to_string());
-            let hd = json.get("hd").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let email = json
+                .get("email")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let hd = json
+                .get("hd")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
             return (email, hd);
         }
     }

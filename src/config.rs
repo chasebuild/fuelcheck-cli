@@ -69,8 +69,8 @@ impl Config {
             return Ok(Config::default());
         }
 
-        let contents = fs::read_to_string(&path)
-            .with_context(|| format!("read config {}", path.display()))?;
+        let contents =
+            fs::read_to_string(&path).with_context(|| format!("read config {}", path.display()))?;
         let config: Config = serde_json::from_str(&contents)
             .with_context(|| format!("parse config {}", path.display()))?;
         Ok(config)
@@ -189,6 +189,22 @@ impl ConfigCommand {
         match self {
             ConfigCommand::Validate(args) => validate_config(args),
             ConfigCommand::Dump(args) => dump_config(args),
+        }
+    }
+
+    pub fn format(&self) -> crate::model::OutputFormat {
+        match self {
+            ConfigCommand::Validate(args) => {
+                args.format.unwrap_or(crate::model::OutputFormat::Text)
+            }
+            ConfigCommand::Dump(args) => args.format.unwrap_or(crate::model::OutputFormat::Json),
+        }
+    }
+
+    pub fn pretty(&self) -> bool {
+        match self {
+            ConfigCommand::Validate(args) => args.pretty,
+            ConfigCommand::Dump(args) => args.pretty,
         }
     }
 }

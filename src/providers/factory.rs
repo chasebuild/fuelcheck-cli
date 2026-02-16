@@ -2,8 +2,8 @@ use crate::cli::UsageArgs;
 use crate::config::Config;
 use crate::errors::CliError;
 use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot};
-use crate::providers::{Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use crate::providers::{Provider, ProviderId, SourcePreference, fetch_status_payload};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use serde::Deserialize;
@@ -22,7 +22,7 @@ impl Provider for FactoryProvider {
 
     async fn fetch_usage(
         &self,
-        _args: &UsageArgs,
+        args: &UsageArgs,
         config: &Config,
         source: SourcePreference,
     ) -> Result<ProviderPayload> {
@@ -32,7 +32,11 @@ impl Provider for FactoryProvider {
             .and_then(|c| c.cookie_header.clone())
             .or_else(|| std::env::var("FACTORY_COOKIE").ok())
             .or_else(|| std::env::var("DROID_COOKIE").ok())
-            .ok_or_else(|| anyhow!("Factory (Droid) cookie header missing. Set provider cookie_header in config."))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "Factory (Droid) cookie header missing. Set provider cookie_header in config."
+                )
+            })?;
 
         let bearer_token = cfg
             .as_ref()
@@ -40,16 +44,26 @@ impl Provider for FactoryProvider {
             .or_else(|| std::env::var("FACTORY_BEARER_TOKEN").ok())
             .or_else(|| extract_access_token(&cookie_header));
 
-        let base_url = std::env::var("FACTORY_BASE_URL").unwrap_or_else(|_| "https://app.factory.ai".to_string());
+        let base_url = std::env::var("FACTORY_BASE_URL")
+            .unwrap_or_else(|_| "https://app.factory.ai".to_string());
         let selected = match source {
             SourcePreference::Auto => SourcePreference::Web,
             other => other,
         };
 
+        let status = if args.status {
+            fetch_status_payload("https://status.factory.ai", args.web_timeout).await
+        } else {
+            None
+        };
+
         match selected {
             SourcePreference::Web | SourcePreference::Api => {
-                let usage = fetch_factory_usage(&cookie_header, bearer_token.as_deref(), &base_url).await?;
-                Ok(self.ok_output("web", Some(usage)))
+                let usage =
+                    fetch_factory_usage(&cookie_header, bearer_token.as_deref(), &base_url).await?;
+                let mut payload = self.ok_output("web", Some(usage));
+                payload.status = status;
+                Ok(payload)
             }
             _ => Err(CliError::UnsupportedSource(self.id(), selected.to_string()).into()),
         }
@@ -123,7 +137,8 @@ async fn fetch_factory_usage(
     base_url: &str,
 ) -> Result<UsageSnapshot> {
     let auth = fetch_factory_auth(cookie_header, bearer_token, base_url).await?;
-    let usage = fetch_factory_subscription_usage(cookie_header, bearer_token, base_url, None).await?;
+    let usage =
+        fetch_factory_subscription_usage(cookie_header, bearer_token, base_url, None).await?;
     Ok(build_snapshot(auth, usage))
 }
 
@@ -179,7 +194,10 @@ async fn fetch_factory_subscription_usage(
     base_url: &str,
     user_id: Option<&str>,
 ) -> Result<FactoryUsageResponse> {
-    let url = format!("{}/api/organization/subscription/usage", base_url.trim_end_matches('/'));
+    let url = format!(
+        "{}/api/organization/subscription/usage",
+        base_url.trim_end_matches('/')
+    );
     let client = reqwest::Client::new();
     let mut request = client
         .post(url)
@@ -199,7 +217,10 @@ async fn fetch_factory_subscription_usage(
     let mut body = serde_json::json!({ "useCache": true });
     if let Some(user_id) = user_id {
         if let Some(obj) = body.as_object_mut() {
-            obj.insert("userId".to_string(), serde_json::Value::String(user_id.to_string()));
+            obj.insert(
+                "userId".to_string(),
+                serde_json::Value::String(user_id.to_string()),
+            );
         }
     }
 

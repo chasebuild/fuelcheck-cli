@@ -1,14 +1,14 @@
-use crate::accounts::{account_label, select_accounts, AccountSelectionArgs};
+use crate::accounts::{AccountSelectionArgs, account_label, select_accounts};
 use crate::cli::UsageArgs;
 use crate::config::{Config, TokenAccount};
 use crate::errors::CliError;
 use crate::model::{
     CreditsSnapshot, ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot,
 };
-use crate::providers::{fetch_status_payload, Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Context, Result};
+use crate::providers::{Provider, ProviderId, SourcePreference, fetch_status_payload};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use directories::BaseDirs;
 use serde::Deserialize;
@@ -43,7 +43,10 @@ impl Provider for CodexProvider {
             account_index: args.account_index.map(|idx| idx.saturating_sub(1)),
             all_accounts: args.all_accounts,
         };
-        let selected = select_accounts(cfg.as_ref().and_then(|c| c.token_accounts.as_ref()), &selection)?;
+        let selected = select_accounts(
+            cfg.as_ref().and_then(|c| c.token_accounts.as_ref()),
+            &selection,
+        )?;
         let Some(selected) = selected else {
             return Ok(vec![self.fetch_usage(args, config, source).await?]);
         };
@@ -58,7 +61,7 @@ impl Provider for CodexProvider {
         }
 
         let status = if args.status {
-            fetch_status_payload("https://status.openai.com").await
+            fetch_status_payload("https://status.openai.com", args.web_timeout).await
         } else {
             None
         };
@@ -99,7 +102,7 @@ impl Provider for CodexProvider {
         };
 
         let status = if args.status {
-            fetch_status_payload("https://status.openai.com").await
+            fetch_status_payload("https://status.openai.com", args.web_timeout).await
         } else {
             None
         };
@@ -117,10 +120,18 @@ impl Provider for CodexProvider {
             SourcePreference::Cli => Err(anyhow!(
                 "Codex CLI source not implemented in this build. Use --source oauth or log in with Codex CLI."
             )),
-            SourcePreference::Web => Err(CliError::UnsupportedSource(self.id(), "web".into()).into()),
-            SourcePreference::Api => Err(CliError::UnsupportedSource(self.id(), "api".into()).into()),
-            SourcePreference::Local => Err(CliError::UnsupportedSource(self.id(), "local".into()).into()),
-            SourcePreference::Auto => Err(CliError::UnsupportedSource(self.id(), "auto".into()).into()),
+            SourcePreference::Web => {
+                Err(CliError::UnsupportedSource(self.id(), "web".into()).into())
+            }
+            SourcePreference::Api => {
+                Err(CliError::UnsupportedSource(self.id(), "api".into()).into())
+            }
+            SourcePreference::Local => {
+                Err(CliError::UnsupportedSource(self.id(), "local".into()).into())
+            }
+            SourcePreference::Auto => {
+                Err(CliError::UnsupportedSource(self.id(), "auto".into()).into())
+            }
         }
     }
 }
@@ -194,8 +205,7 @@ struct CodexOAuthCredentials {
 impl CodexOAuthCredentials {
     fn load() -> Result<Self> {
         let auth_path = codex_auth_path();
-        let data = fs::read(&auth_path)
-            .with_context(|| format!("read {}", auth_path.display()))?;
+        let data = fs::read(&auth_path).with_context(|| format!("read {}", auth_path.display()))?;
         let auth: AuthJson = serde_json::from_slice(&data)?;
 
         if let Some(api_key) = auth.openai_api_key.clone().filter(|s| !s.trim().is_empty()) {
@@ -208,7 +218,9 @@ impl CodexOAuthCredentials {
             });
         }
 
-        let tokens = auth.tokens.ok_or_else(|| anyhow!("Codex auth.json missing tokens"))?;
+        let tokens = auth
+            .tokens
+            .ok_or_else(|| anyhow!("Codex auth.json missing tokens"))?;
         let access_token = tokens
             .access_token
             .ok_or_else(|| anyhow!("Codex auth.json missing access_token"))?;
@@ -240,10 +252,7 @@ impl CodexOAuthCredentials {
                     account_label(account, index)
                 )
             })?;
-        let account_id = account
-            .id
-            .clone()
-            .filter(|val| !val.trim().is_empty());
+        let account_id = account.id.clone().filter(|val| !val.trim().is_empty());
         Ok(Self {
             access_token: token,
             refresh_token: String::new(),
@@ -254,7 +263,9 @@ impl CodexOAuthCredentials {
     }
 
     fn needs_refresh(&self) -> bool {
-        let Some(last) = self.last_refresh else { return true };
+        let Some(last) = self.last_refresh else {
+            return true;
+        };
         let age = Utc::now().signed_duration_since(last);
         age.num_days() >= 8
     }
@@ -343,7 +354,10 @@ async fn refresh_codex_token(creds: &CodexOAuthCredentials) -> Result<CodexOAuth
         .and_then(|v| v.as_str())
         .unwrap_or(&creds.refresh_token)
         .to_string();
-    let id_token = json.get("id_token").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let id_token = json
+        .get("id_token")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
 
     Ok(CodexOAuthCredentials {
         access_token,
@@ -400,7 +414,11 @@ fn load_codex_base_url_from_config() -> Option<String> {
     let home = BaseDirs::new()?.home_dir().to_path_buf();
     let codex_home = std::env::var("CODEX_HOME").ok().and_then(|v| {
         let trimmed = v.trim().to_string();
-        if trimmed.is_empty() { None } else { Some(trimmed) }
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
     });
     let root = codex_home.unwrap_or_else(|| home.join(".codex").to_string_lossy().to_string());
     let config_path = PathBuf::from(root).join("config.toml");
@@ -424,9 +442,22 @@ fn load_codex_base_url_from_config() -> Option<String> {
     None
 }
 
-fn map_codex_usage(usage: &CodexUsageResponse, creds: &CodexOAuthCredentials) -> Result<UsageSnapshot> {
-    let primary = make_window(usage.rate_limit.as_ref().and_then(|r| r.primary_window.as_ref()));
-    let secondary = make_window(usage.rate_limit.as_ref().and_then(|r| r.secondary_window.as_ref()));
+fn map_codex_usage(
+    usage: &CodexUsageResponse,
+    creds: &CodexOAuthCredentials,
+) -> Result<UsageSnapshot> {
+    let primary = make_window(
+        usage
+            .rate_limit
+            .as_ref()
+            .and_then(|r| r.primary_window.as_ref()),
+    );
+    let secondary = make_window(
+        usage
+            .rate_limit
+            .as_ref()
+            .and_then(|r| r.secondary_window.as_ref()),
+    );
 
     let identity = ProviderIdentitySnapshot {
         provider_id: Some("codex".to_string()),

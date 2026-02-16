@@ -1,5 +1,5 @@
 use crate::config::{TokenAccount, TokenAccounts};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 #[derive(Debug, Clone, Default)]
 pub struct AccountSelectionArgs {
@@ -71,7 +71,9 @@ pub fn select_accounts(
         }]));
     }
 
-    let active = token_accounts.active_index.filter(|idx| *idx < accounts.len());
+    let active = token_accounts
+        .active_index
+        .filter(|idx| *idx < accounts.len());
     let index = active.unwrap_or(0);
     Ok(Some(vec![SelectedAccount {
         index,
@@ -93,7 +95,9 @@ pub fn find_account_index(accounts: &[TokenAccount], name: &str) -> Option<usize
     if needle.is_empty() {
         return None;
     }
-    accounts.iter().position(|account| matches_account(account, &needle))
+    accounts
+        .iter()
+        .position(|account| matches_account(account, &needle))
 }
 
 fn matches_account(account: &TokenAccount, needle: &str) -> bool {

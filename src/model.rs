@@ -90,6 +90,7 @@ pub struct RateWindow {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderIdentitySnapshot {
+    #[serde(rename = "providerID")]
     pub provider_id: Option<String>,
     pub account_email: Option<String>,
     pub account_organization: Option<String>,
@@ -167,4 +168,34 @@ pub struct OpenAIDashboardDailyBreakdown {
 pub struct OpenAIDashboardServiceUsage {
     pub service: String,
     pub credits_used: f64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_identity_serializes_provider_id_key() {
+        let identity = ProviderIdentitySnapshot {
+            provider_id: Some("codex".to_string()),
+            account_email: None,
+            account_organization: None,
+            login_method: None,
+        };
+        let snapshot = UsageSnapshot {
+            primary: None,
+            secondary: None,
+            tertiary: None,
+            provider_cost: None,
+            updated_at: Utc::now(),
+            identity: Some(identity),
+            account_email: None,
+            account_organization: None,
+            login_method: None,
+        };
+
+        let json = serde_json::to_string(&snapshot).expect("serialize usage snapshot");
+        assert!(json.contains("\"providerID\""));
+        assert!(!json.contains("\"providerId\""));
+    }
 }

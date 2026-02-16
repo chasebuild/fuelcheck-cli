@@ -1,12 +1,14 @@
-use crate::cli::{collect_usage_outputs, UsageArgs};
+use crate::cli::{UsageArgs, collect_usage_outputs};
 use crate::config::Config;
 use crate::model::{ProviderCostSnapshot, ProviderPayload, RateWindow};
 use crate::providers::ProviderRegistry;
 use anyhow::Result;
 use chrono::{DateTime, Local, Utc};
 use crossterm::cursor::{Hide, Show};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::execute;
+use crossterm::terminal::{
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+};
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -229,7 +231,11 @@ fn render_payload(payload: &ProviderPayload, args: &UsageArgs) -> Vec<Line<'stat
     lines
 }
 
-fn provider_header(payload: &ProviderPayload, header_style: Style, dim_style: Style) -> Line<'static> {
+fn provider_header(
+    payload: &ProviderPayload,
+    header_style: Style,
+    dim_style: Style,
+) -> Line<'static> {
     let mut label = payload.provider.clone();
     if let Some(version) = &payload.version {
         label.push(' ');
