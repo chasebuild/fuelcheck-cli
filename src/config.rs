@@ -1,4 +1,3 @@
-use crate::errors::CliError;
 use crate::providers::{ProviderId, SourcePreference};
 use anyhow::{Context, Result};
 use clap::Subcommand;
@@ -132,14 +131,19 @@ impl ConfigCommand {
 
 fn validate_config(args: ConfigArgs) -> Result<()> {
     let path = Config::path(args.config.as_ref())?;
-    if !path.exists() {
-        return Err(CliError::ConfigMissing(path).into());
-    }
-
+    let missing = !path.exists();
     let _config = Config::load(args.config.as_ref())?;
     match args.format.unwrap_or(crate::model::OutputFormat::Text) {
         crate::model::OutputFormat::Json => {
-            let output = serde_json::json!({"status": "ok"});
+            let output = if missing {
+                serde_json::json!({
+                    "status": "ok",
+                    "missing": true,
+                    "path": path.display().to_string()
+                })
+            } else {
+                serde_json::json!({"status": "ok"})
+            };
             if args.pretty {
                 println!("{}", serde_json::to_string_pretty(&output)?);
             } else {
@@ -147,7 +151,11 @@ fn validate_config(args: ConfigArgs) -> Result<()> {
             }
         }
         crate::model::OutputFormat::Text => {
-            println!("config ok: {}", path.display());
+            if missing {
+                println!("config ok (missing; using defaults): {}", path.display());
+            } else {
+                println!("config ok: {}", path.display());
+            }
         }
     }
 
