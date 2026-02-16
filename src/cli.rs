@@ -125,7 +125,7 @@ pub async fn run_usage(args: UsageArgs, registry: &ProviderRegistry) -> Result<(
                 args.source.to_string(),
                 ProviderErrorPayload {
                     code: 1,
-                    message: err.to_string(),
+                    message: format_error_chain(&err),
                     kind: Some(ErrorKind::Provider),
                 },
             )),
@@ -163,7 +163,7 @@ pub async fn run_cost(args: CostArgs, registry: &ProviderRegistry) -> Result<()>
                 "local".to_string(),
                 ProviderErrorPayload {
                     code: 1,
-                    message: err.to_string(),
+                    message: format_error_chain(&err),
                     kind: Some(ErrorKind::Provider),
                 },
             )),
@@ -256,4 +256,14 @@ fn format_payload_text(payload: &ProviderPayload) -> String {
     }
 
     lines.join("\n")
+}
+
+fn format_error_chain(err: &anyhow::Error) -> String {
+    let mut parts: Vec<String> = err.chain().map(|e| e.to_string()).collect();
+    if parts.is_empty() {
+        return "Unknown error".to_string();
+    }
+    // Avoid duplicate context strings if any.
+    parts.dedup();
+    parts.join(": ")
 }
