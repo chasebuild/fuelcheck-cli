@@ -1,5 +1,6 @@
 use crate::cli::UsageArgs;
 use crate::config::Config;
+use crate::errors::CliError;
 use crate::model::{
     CreditsSnapshot, ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot,
 };
@@ -99,6 +100,7 @@ struct WindowSnapshot {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CreditDetails {
     #[serde(rename = "has_credits")]
     has_credits: Option<bool>,
@@ -330,7 +332,7 @@ fn load_codex_base_url_from_config() -> Option<String> {
         let key = parts.next()?.trim();
         let value = parts.next()?.trim();
         if key == "chatgpt_base_url" {
-            let mut val = value.trim_matches('"').trim_matches('\'').to_string();
+            let val = value.trim_matches('"').trim_matches('\'').to_string();
             if val.is_empty() {
                 return None;
             }

@@ -5,7 +5,7 @@ use clap::Subcommand;
 use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
@@ -13,7 +13,7 @@ pub struct Config {
     pub providers: Option<Vec<ProviderConfig>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderConfig {
     pub id: ProviderId,
     pub enabled: Option<bool>,

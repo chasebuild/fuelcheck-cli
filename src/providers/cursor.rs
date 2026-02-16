@@ -51,6 +51,7 @@ impl Provider for CursorProvider {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CursorUsageSummary {
     #[serde(rename = "billingCycleStart")]
     billing_cycle_start: Option<String>,
@@ -80,6 +81,7 @@ struct CursorIndividualUsage {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CursorPlanUsage {
     enabled: Option<bool>,
     used: Option<i64>,
@@ -94,6 +96,7 @@ struct CursorPlanUsage {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CursorOnDemandUsage {
     enabled: Option<bool>,
     used: Option<i64>,
@@ -108,6 +111,7 @@ struct CursorTeamUsage {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CursorUserInfo {
     email: Option<String>,
     name: Option<String>,
@@ -115,6 +119,7 @@ struct CursorUserInfo {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CursorUsageResponse {
     #[serde(rename = "gpt-4")]
     gpt4: Option<CursorModelUsage>,
@@ -123,6 +128,7 @@ struct CursorUsageResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CursorModelUsage {
     #[serde(rename = "numRequests")]
     num_requests: Option<i64>,
@@ -164,8 +170,6 @@ async fn fetch_cursor_usage(cookie_header: &str) -> Result<UsageSnapshot> {
         .and_then(|p| p.limit)
         .unwrap_or(0) as f64;
 
-    let plan_used = plan_used_raw / 100.0;
-    let plan_limit = plan_limit_raw / 100.0;
     let plan_percent_used = if plan_limit_raw > 0.0 {
         (plan_used_raw / plan_limit_raw) * 100.0
     } else {
@@ -192,13 +196,13 @@ async fn fetch_cursor_usage(cookie_header: &str) -> Result<UsageSnapshot> {
         .and_then(|o| o.limit)
         .map(|v| v as f64 / 100.0);
 
-    let team_on_demand_used = summary
+    let _team_on_demand_used = summary
         .team_usage
         .as_ref()
         .and_then(|t| t.on_demand.as_ref())
         .and_then(|o| o.used)
         .map(|v| v as f64 / 100.0);
-    let team_on_demand_limit = summary
+    let _team_on_demand_limit = summary
         .team_usage
         .as_ref()
         .and_then(|t| t.on_demand.as_ref())

@@ -69,6 +69,7 @@ pub struct ProviderErrorPayload {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "lowercase")]
 pub enum ErrorKind {
     Args,

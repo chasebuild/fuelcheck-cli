@@ -5,6 +5,7 @@ use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageS
 use crate::providers::{Provider, ProviderId, SourcePreference};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use base64::Engine;
 use chrono::{DateTime, Utc};
 use directories::BaseDirs;
 use regex::Regex;
@@ -50,7 +51,8 @@ impl Provider for GeminiProvider {
 
 #[derive(Debug, Deserialize)]
 struct SettingsAuth {
-    selectedType: Option<String>,
+    #[serde(rename = "selectedType")]
+    selected_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -152,7 +154,7 @@ fn read_gemini_auth_type() -> Result<Option<String>> {
     Ok(root
         .security
         .and_then(|s| s.auth)
-        .and_then(|a| a.selectedType))
+        .and_then(|a| a.selected_type))
 }
 
 fn load_oauth_credentials() -> Result<OAuthCredentials> {

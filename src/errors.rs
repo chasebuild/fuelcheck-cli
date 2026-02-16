@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[allow(dead_code)]
 pub enum CliError {
     #[error("unknown provider: {0}")]
     UnknownProvider(String),

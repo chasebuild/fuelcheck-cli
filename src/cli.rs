@@ -20,7 +20,7 @@ pub enum Command {
     /// Compute local cost usage (from local logs).
     Cost(CostArgs),
     /// Validate or dump config.
-    Config(ConfigCommand),
+    Config(ConfigCommandArgs),
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -190,8 +190,14 @@ pub async fn run_cost(args: CostArgs, registry: &ProviderRegistry) -> Result<()>
     }, outputs)
 }
 
-pub async fn run_config(cmd: ConfigCommand) -> Result<()> {
-    cmd.execute().await
+#[derive(Parser, Debug)]
+pub struct ConfigCommandArgs {
+    #[command(subcommand)]
+    pub command: ConfigCommand,
+}
+
+pub async fn run_config(cmd: ConfigCommandArgs) -> Result<()> {
+    cmd.command.execute().await
 }
 
 fn cli_print_usage(args: &UsageArgs, outputs: Vec<ProviderPayload>) -> Result<()> {

@@ -159,6 +159,7 @@ struct OAuthExtraUsage {
     monthly_limit: Option<f64>,
     #[serde(rename = "used_credits")]
     used_credits: Option<f64>,
+    #[allow(dead_code)]
     utilization: Option<f64>,
     currency: Option<String>,
 }
@@ -262,10 +263,11 @@ async fn claude_oauth_fetch(access_token: &str) -> Result<OAuthUsageResponse> {
 }
 
 fn map_claude_usage(usage: &OAuthUsageResponse, creds: &ClaudeOAuthCredentials) -> Result<UsageSnapshot> {
-    let primary = make_window(&usage.five_hour, 5 * 60).ok_or_else(|| anyhow!("missing session data"))?;
-    let weekly = make_window(&usage.seven_day, 7 * 24 * 60);
+    let primary = make_window(usage.five_hour.as_ref(), 5 * 60)
+        .ok_or_else(|| anyhow!("missing session data"))?;
+    let weekly = make_window(usage.seven_day.as_ref(), 7 * 24 * 60);
     let model_specific = make_window(
-        &usage.seven_day_sonnet.or(usage.seven_day_opus),
+        usage.seven_day_sonnet.as_ref().or(usage.seven_day_opus.as_ref()),
         7 * 24 * 60,
     );
 
@@ -292,8 +294,8 @@ fn map_claude_usage(usage: &OAuthUsageResponse, creds: &ClaudeOAuthCredentials) 
     })
 }
 
-fn make_window(window: &Option<OAuthUsageWindow>, minutes: i64) -> Option<RateWindow> {
-    let window = window.as_ref()?;
+fn make_window(window: Option<&OAuthUsageWindow>, minutes: i64) -> Option<RateWindow> {
+    let window = window?;
     let utilization = window.utilization?;
     let resets_at = window
         .resets_at
