@@ -1,5 +1,6 @@
+use crate::accounts::{account_label, select_accounts, AccountSelectionArgs};
 use crate::cli::UsageArgs;
-use crate::config::Config;
+use crate::config::{Config, TokenAccount};
 use crate::errors::CliError;
 use crate::model::{
     CreditsSnapshot, ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot,
@@ -24,6 +25,58 @@ impl Provider for CodexProvider {
 
     fn version(&self) -> &'static str {
         "2024-06-04"
+    }
+
+    fn supports_token_accounts(&self) -> bool {
+        true
+    }
+
+    async fn fetch_usage_all(
+        &self,
+        args: &UsageArgs,
+        config: &Config,
+        source: SourcePreference,
+    ) -> Result<Vec<ProviderPayload>> {
+        let cfg = config.provider_config(self.id());
+        let selection = AccountSelectionArgs {
+            account: args.account.clone(),
+            account_index: args.account_index.map(|idx| idx.saturating_sub(1)),
+            all_accounts: args.all_accounts,
+        };
+        let selected = select_accounts(cfg.as_ref().and_then(|c| c.token_accounts.as_ref()), &selection)?;
+        let Some(selected) = selected else {
+            return Ok(vec![self.fetch_usage(args, config, source).await?]);
+        };
+
+        let effective = self.resolve_source(cfg.clone(), source);
+        let selected_source = match effective {
+            SourcePreference::Auto | SourcePreference::Oauth => SourcePreference::Oauth,
+            other => other,
+        };
+        if selected_source != SourcePreference::Oauth {
+            return Err(CliError::UnsupportedSource(self.id(), selected_source.to_string()).into());
+        }
+
+        let status = if args.status {
+            fetch_status_payload("https://status.openai.com").await
+        } else {
+            None
+        };
+
+        let mut outputs = Vec::new();
+        for account in selected {
+            let creds = CodexOAuthCredentials::from_token_account(&account.account, account.index)?;
+            let (usage, credits) = fetch_oauth_usage_with_creds(&creds).await?;
+            let mut payload = self.ok_output("oauth", Some(usage));
+            if !args.no_credits {
+                payload.credits = credits;
+            }
+            payload.status = status.clone();
+            payload.account = Some(account_label(&account.account, account.index));
+            outputs.push(payload);
+        }
+
+        Ok(outputs)
     }
 
     async fn fetch_usage(
@@ -176,6 +229,30 @@ impl CodexOAuthCredentials {
         })
     }
 
+    fn from_token_account(account: &TokenAccount, index: usize) -> Result<Self> {
+        let token = account
+            .token
+            .clone()
+            .filter(|val| !val.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow!(
+                    "Codex token account {} missing token",
+                    account_label(account, index)
+                )
+            })?;
+        let account_id = account
+            .id
+            .clone()
+            .filter(|val| !val.trim().is_empty());
+        Ok(Self {
+            access_token: token,
+            refresh_token: String::new(),
+            id_token: None,
+            account_id,
+            last_refresh: None,
+        })
+    }
+
     fn needs_refresh(&self) -> bool {
         let Some(last) = self.last_refresh else { return true };
         let age = Utc::now().signed_duration_since(last);
@@ -224,9 +301,14 @@ async fn fetch_oauth_usage() -> Result<(UsageSnapshot, Option<CreditsSnapshot>)>
         creds = refresh_codex_token(&creds).await?;
         let _ = creds.save();
     }
+    fetch_oauth_usage_with_creds(&creds).await
+}
 
-    let usage = codex_oauth_fetch(&creds).await?;
-    let usage_snapshot = map_codex_usage(&usage, &creds)?;
+async fn fetch_oauth_usage_with_creds(
+    creds: &CodexOAuthCredentials,
+) -> Result<(UsageSnapshot, Option<CreditsSnapshot>)> {
+    let usage = codex_oauth_fetch(creds).await?;
+    let usage_snapshot = map_codex_usage(&usage, creds)?;
     let credits = map_codex_credits(&usage);
     Ok((usage_snapshot, credits))
 }

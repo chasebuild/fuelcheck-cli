@@ -1,4 +1,5 @@
 mod cli;
+mod accounts;
 mod config;
 mod errors;
 mod model;

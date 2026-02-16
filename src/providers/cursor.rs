@@ -1,5 +1,6 @@
+use crate::accounts::{account_label, select_accounts, AccountSelectionArgs};
 use crate::cli::UsageArgs;
-use crate::config::Config;
+use crate::config::{Config, TokenAccount};
 use crate::errors::CliError;
 use crate::model::{
     ProviderCostSnapshot, ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot,
@@ -20,6 +21,56 @@ impl Provider for CursorProvider {
 
     fn version(&self) -> &'static str {
         "2024-08-01"
+    }
+
+    fn supports_token_accounts(&self) -> bool {
+        true
+    }
+
+    async fn fetch_usage_all(
+        &self,
+        args: &UsageArgs,
+        config: &Config,
+        source: SourcePreference,
+    ) -> Result<Vec<ProviderPayload>> {
+        let cfg = config.provider_config(self.id());
+        let selection = AccountSelectionArgs {
+            account: args.account.clone(),
+            account_index: args.account_index.map(|idx| idx.saturating_sub(1)),
+            all_accounts: args.all_accounts,
+        };
+        let selected = select_accounts(cfg.as_ref().and_then(|c| c.token_accounts.as_ref()), &selection)?;
+        let Some(selected) = selected else {
+            return Ok(vec![self.fetch_usage(args, config, source).await?]);
+        };
+
+        let selected_source = match source {
+            SourcePreference::Auto => SourcePreference::Web,
+            other => other,
+        };
+        let source_label = match selected_source {
+            SourcePreference::Api => "api",
+            _ => "web",
+        };
+        match selected_source {
+            SourcePreference::Web | SourcePreference::Api => {}
+            _ => {
+                return Err(
+                    CliError::UnsupportedSource(self.id(), selected_source.to_string()).into(),
+                )
+            }
+        }
+
+        let mut outputs = Vec::new();
+        for account in selected {
+            let cookie_header = token_account_cookie(&account.account, account.index)?;
+            let usage = fetch_cursor_usage(&cookie_header).await?;
+            let mut payload = self.ok_output(source_label, Some(usage));
+            payload.account = Some(account_label(&account.account, account.index));
+            outputs.push(payload);
+        }
+
+        Ok(outputs)
     }
 
     async fn fetch_usage(
@@ -140,6 +191,20 @@ struct CursorModelUsage {
     max_request_usage: Option<i64>,
     #[serde(rename = "maxTokenUsage")]
     max_token_usage: Option<i64>,
+}
+
+fn token_account_cookie(account: &TokenAccount, index: usize) -> Result<String> {
+    let cookie = account
+        .token
+        .clone()
+        .filter(|val| !val.trim().is_empty())
+        .ok_or_else(|| {
+            anyhow!(
+                "Cursor token account {} missing token",
+                account_label(account, index)
+            )
+        })?;
+    Ok(cookie)
 }
 
 async fn fetch_cursor_usage(cookie_header: &str) -> Result<UsageSnapshot> {
