@@ -1,3 +1,5 @@
+use crate::errors::CliError;
+use crate::errors::CliError;
 use crate::providers::{ProviderId, SourcePreference};
 use anyhow::{Context, Result};
 use clap::Subcommand;
@@ -23,6 +25,22 @@ pub struct ProviderConfig {
     pub region: Option<String>,
     pub workspace_id: Option<String>,
     pub token_accounts: Option<TokenAccounts>,
+}
+
+impl ProviderConfig {
+    pub fn default_provider(id: ProviderId) -> Self {
+        Self {
+            id,
+            enabled: None,
+            source: None,
+            cookie_source: None,
+            cookie_header: None,
+            api_key: None,
+            region: None,
+            workspace_id: None,
+            token_accounts: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -66,6 +84,16 @@ impl Config {
             .ok_or_else(|| CliError::ConfigPathUnavailable.into())
     }
 
+    pub fn save(&self, path_override: Option<&PathBuf>) -> Result<()> {
+        let path = Config::path(path_override)?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let data = serde_json::to_vec_pretty(self)?;
+        fs::write(&path, data)?;
+        Ok(())
+    }
+
     pub fn enabled_providers_or_default(&self) -> Vec<ProviderId> {
         let mut enabled: Vec<ProviderId> = self
             .providers
@@ -94,6 +122,43 @@ impl Config {
             .unwrap_or_default()
             .into_iter()
             .find(|cfg| cfg.id == id)
+    }
+}
+
+pub struct DetectResult {
+    pub codex_auth: bool,
+    pub claude_oauth: bool,
+    pub gemini_oauth: bool,
+}
+
+impl DetectResult {
+    pub fn detect() -> Self {
+        let home = BaseDirs::new().map(|d| d.home_dir().to_path_buf());
+        let codex = std::env::var("CODEX_HOME")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .map(PathBuf::from)
+            .or_else(|| home.clone().map(|h| h.join(".codex")));
+        let codex_auth = codex
+            .as_ref()
+            .map(|p| p.join("auth.json").exists())
+            .unwrap_or(false);
+
+        let claude_oauth = home
+            .as_ref()
+            .map(|h| h.join(".claude").join(".credentials.json").exists())
+            .unwrap_or(false);
+
+        let gemini_oauth = home
+            .as_ref()
+            .map(|h| h.join(".gemini").join("oauth_creds.json").exists())
+            .unwrap_or(false);
+
+        Self {
+            codex_auth,
+            claude_oauth,
+            gemini_oauth,
+        }
     }
 }
 
