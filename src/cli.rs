@@ -66,7 +66,7 @@ pub struct UsageArgs {
     /// Prefer account by name (provider-dependent).
     #[arg(long)]
     pub account: Option<String>,
-    /// Choose account index (provider-dependent).
+    /// Choose account index (1-based, provider-dependent).
     #[arg(long)]
     pub account_index: Option<usize>,
     /// Query all accounts when available.
@@ -113,9 +113,15 @@ pub struct SetupArgs {
     /// Enable all providers regardless of detected credentials.
     #[arg(long)]
     pub enable_all: bool,
+    /// Provide Claude cookie header or sessionKey explicitly (uses web source).
+    #[arg(long)]
+    pub claude_cookie: Option<String>,
     /// Provide Cursor cookie header explicitly (skips browser import).
     #[arg(long)]
     pub cursor_cookie: Option<String>,
+    /// Provide Factory (Droid) cookie header explicitly.
+    #[arg(long, alias = "droid-cookie")]
+    pub factory_cookie: Option<String>,
     /// Explicit config path.
     #[arg(long)]
     pub config: Option<PathBuf>,
@@ -150,17 +156,39 @@ pub(crate) async fn collect_usage_outputs(
         args.providers.clone()
     };
 
+    let wants_account_override =
+        args.account.is_some() || args.account_index.is_some() || args.all_accounts;
+    if wants_account_override && provider_ids.len() != 1 {
+        return Err(anyhow::anyhow!(
+            "account selection requires a single provider"
+        ));
+    }
+    if wants_account_override {
+        let provider_id = provider_ids
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("no provider selected"))?;
+        let provider = registry
+            .get(provider_id)
+            .ok_or_else(|| CliError::UnknownProvider(provider_id.to_string()))?;
+        if !provider.supports_token_accounts() {
+            return Err(anyhow::anyhow!(
+                "provider {} does not support token accounts",
+                provider_id
+            ));
+        }
+    }
+
     let mut outputs: Vec<ProviderPayload> = Vec::new();
     for provider_id in provider_ids {
         let provider = registry
             .get(&provider_id)
             .ok_or_else(|| CliError::UnknownProvider(provider_id.to_string()))?;
         match provider
-            .fetch_usage(args, config, args.source)
+            .fetch_usage_all(args, config, args.source)
             .await
             .with_context(|| format!("provider {}", provider_id))
         {
-            Ok(output) => outputs.push(output),
+            Ok(mut output_set) => outputs.append(&mut output_set),
             Err(err) => outputs.push(ProviderPayload::error(
                 provider_id.to_string(),
                 args.source.to_string(),
@@ -276,16 +304,17 @@ pub async fn run_setup(args: SetupArgs) -> Result<()> {
     );
 
     // Claude
-    enable(
-        ProviderId::Claude,
-        enable_all || detected.claude_oauth,
-        crate::config::ProviderConfig {
-            id: ProviderId::Claude,
-            enabled: Some(enable_all || detected.claude_oauth),
-            source: Some(crate::providers::SourcePreference::Oauth),
-            ..crate::config::ProviderConfig::default_provider(ProviderId::Claude)
-        },
-    );
+    let mut claude_cfg = crate::config::ProviderConfig {
+        id: ProviderId::Claude,
+        enabled: Some(enable_all || detected.claude_oauth || args.claude_cookie.is_some()),
+        source: Some(crate::providers::SourcePreference::Oauth),
+        ..crate::config::ProviderConfig::default_provider(ProviderId::Claude)
+    };
+    if let Some(cookie) = args.claude_cookie.clone() {
+        claude_cfg.cookie_header = Some(cookie);
+        claude_cfg.source = Some(crate::providers::SourcePreference::Web);
+    }
+    enable(ProviderId::Claude, claude_cfg.enabled.unwrap_or(false), claude_cfg);
 
     // Gemini
     enable(
@@ -311,6 +340,18 @@ pub async fn run_setup(args: SetupArgs) -> Result<()> {
     }
     enable(ProviderId::Cursor, cursor_cfg.enabled.unwrap_or(false), cursor_cfg);
 
+    // Factory (Droid)
+    let mut factory_cfg = crate::config::ProviderConfig {
+        id: ProviderId::Factory,
+        enabled: Some(enable_all || args.factory_cookie.is_some()),
+        source: Some(crate::providers::SourcePreference::Web),
+        ..crate::config::ProviderConfig::default_provider(ProviderId::Factory)
+    };
+    if let Some(cookie) = args.factory_cookie.clone() {
+        factory_cfg.cookie_header = Some(cookie);
+    }
+    enable(ProviderId::Factory, factory_cfg.enabled.unwrap_or(false), factory_cfg);
+
     let config = Config {
         version: Some(1),
         providers: Some(providers),
@@ -322,14 +363,18 @@ pub async fn run_setup(args: SetupArgs) -> Result<()> {
     if !detected.codex_auth {
         println!("Codex: run `codex` to authenticate (creates ~/.codex/auth.json).");
     }
-    if !detected.claude_oauth {
+    if !detected.claude_oauth && args.claude_cookie.is_none() {
         println!("Claude: run `claude` to authenticate (creates ~/.claude/.credentials.json).");
+        println!("Claude: or provide a session cookie via `fuelcheck-cli setup --claude-cookie \"sessionKey=...\"`.");
     }
     if !detected.gemini_oauth {
         println!("Gemini: run `gemini` to authenticate (creates ~/.gemini/oauth_creds.json).");
     }
     if args.cursor_cookie.is_none() {
         println!("Cursor: add cookie header via `fuelcheck-cli setup --cursor-cookie \"...\"`.");
+    }
+    if args.factory_cookie.is_none() {
+        println!("Factory (Droid): add cookie header via `fuelcheck-cli setup --factory-cookie \"...\"`.");
     }
 
     Ok(())
