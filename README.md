@@ -1,6 +1,6 @@
 # ⛽ Fuelcheck CLI
 
-Fuelcheck CLI is a Rust command-line tool that fetches usage and cost data from multiple AI providers. It emits text or JSON output compatible with CodexBar-style dashboards and scripts.
+Fuelcheck CLI is a Rust command-line tool that fetches usage and cost data from multiple AI providers. It emits text or JSON output compatible with CodexBar-style dashboards and scripts. (heavily inspired by [CodexBar](https://github.com/steipete/CodexBar))
 
 <img width="1418" height="946" alt="image" src="https://github.com/user-attachments/assets/9306bc2d-4426-4281-9983-aac10860986c" />
 
