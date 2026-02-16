@@ -20,6 +20,7 @@ mod zai;
 mod minimax;
 mod kimi;
 mod kimi_k2;
+mod copilot;
 
 pub use claude::ClaudeProvider;
 pub use codex::CodexProvider;
@@ -30,6 +31,7 @@ pub use zai::ZaiProvider;
 pub use minimax::MiniMaxProvider;
 pub use kimi::KimiProvider;
 pub use kimi_k2::KimiK2Provider;
+pub use copilot::CopilotProvider;
 pub(crate) use utils::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum)]
@@ -47,6 +49,7 @@ pub enum ProviderId {
     Kimi,
     #[serde(rename = "kimik2")]
     KimiK2,
+    Copilot,
 }
 
 impl fmt::Display for ProviderId {
@@ -61,6 +64,7 @@ impl fmt::Display for ProviderId {
             ProviderId::MiniMax => "minimax",
             ProviderId::Kimi => "kimi",
             ProviderId::KimiK2 => "kimik2",
+            ProviderId::Copilot => "copilot",
         };
         write!(f, "{}", label)
     }
@@ -78,6 +82,7 @@ impl ProviderId {
             ProviderId::MiniMax,
             ProviderId::Kimi,
             ProviderId::KimiK2,
+            ProviderId::Copilot,
         ]
     }
 }
@@ -95,6 +100,7 @@ pub enum ProviderSelector {
     Kimi,
     #[value(alias = "kimik2")]
     KimiK2,
+    Copilot,
     All,
     Both,
 }
@@ -113,6 +119,7 @@ impl ProviderSelector {
             ProviderSelector::MiniMax => vec![ProviderId::MiniMax],
             ProviderSelector::Kimi => vec![ProviderId::Kimi],
             ProviderSelector::KimiK2 => vec![ProviderId::KimiK2],
+            ProviderSelector::Copilot => vec![ProviderId::Copilot],
         }
     }
 }
@@ -129,6 +136,7 @@ impl fmt::Display for ProviderSelector {
             ProviderSelector::MiniMax => "minimax",
             ProviderSelector::Kimi => "kimi",
             ProviderSelector::KimiK2 => "kimik2",
+            ProviderSelector::Copilot => "copilot",
             ProviderSelector::All => "all",
             ProviderSelector::Both => "both",
         };
@@ -247,6 +255,7 @@ impl ProviderRegistry {
         providers.insert(ProviderId::MiniMax, Box::new(MiniMaxProvider));
         providers.insert(ProviderId::Kimi, Box::new(KimiProvider));
         providers.insert(ProviderId::KimiK2, Box::new(KimiK2Provider));
+        providers.insert(ProviderId::Copilot, Box::new(CopilotProvider));
         Self { providers }
     }
 
