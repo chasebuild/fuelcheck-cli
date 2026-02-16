@@ -5,6 +5,7 @@ use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageS
 use crate::providers::{Provider, ProviderId, SourcePreference, parse_rfc3339};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
+use base64::Engine;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -413,7 +414,8 @@ fn aggregate_series(series: &[MonitoringTimeSeries]) -> HashMap<QuotaKey, f64> {
 
 fn quota_key(series: &MonitoringTimeSeries) -> Option<QuotaKey> {
     let metric_labels = series.metric.labels.as_ref()?;
-    let resource_labels = series.resource.labels.as_ref().unwrap_or(&HashMap::new());
+    let empty_labels: HashMap<String, String> = HashMap::new();
+    let resource_labels = series.resource.labels.as_ref().unwrap_or(&empty_labels);
     let quota_metric = metric_labels
         .get("quota_metric")
         .or_else(|| resource_labels.get("quota_id"))?

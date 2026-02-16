@@ -180,7 +180,7 @@ struct MiniMaxBaseResponse {
     status_msg: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct MiniMaxModelRemains {
     #[serde(rename = "current_interval_total_count")]
     current_interval_total_count: Option<i64>,
@@ -208,7 +208,7 @@ fn map_minimax_usage(payload: MiniMaxCodingPlanPayload) -> Result<UsageSnapshot>
         }
     }
 
-    let model_remains = data
+    let model_remains: Vec<MiniMaxModelRemains> = data
         .and_then(|d| d.model_remains.clone())
         .or(payload.model_remains.clone())
         .unwrap_or_default();
