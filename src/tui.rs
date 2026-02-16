@@ -20,6 +20,41 @@ use std::collections::HashSet;
 use std::io;
 use std::time::Duration;
 
+#[derive(Clone, Copy)]
+struct TuiTheme {
+    accent: Color,
+    dim: Color,
+    alert: Color,
+}
+
+impl TuiTheme {
+    fn accent_style(self) -> Style {
+        Style::default().fg(self.accent)
+    }
+
+    fn accent_bold(self) -> Style {
+        Style::default().fg(self.accent).add_modifier(Modifier::BOLD)
+    }
+
+    fn dim_style(self) -> Style {
+        Style::default().fg(self.dim)
+    }
+
+    fn alert_style(self) -> Style {
+        Style::default().fg(self.alert).add_modifier(Modifier::BOLD)
+    }
+}
+
+impl Default for TuiTheme {
+    fn default() -> Self {
+        Self {
+            accent: Color::Cyan,
+            dim: Color::DarkGray,
+            alert: Color::Red,
+        }
+    }
+}
+
 pub async fn run_usage_watch(
     mut args: UsageArgs,
     registry: &ProviderRegistry,
@@ -118,6 +153,7 @@ impl Drop for TuiGuard {
 }
 
 fn draw(frame: &mut Frame<'_>, args: &UsageArgs, state: &LiveState, tabs: &[AccountTab]) {
+    let theme = TuiTheme::default();
     let area = frame.size();
     let layout = Layout::default()
         .direction(Direction::Vertical)
@@ -128,16 +164,20 @@ fn draw(frame: &mut Frame<'_>, args: &UsageArgs, state: &LiveState, tabs: &[Acco
         ])
         .split(area);
 
-    draw_header(frame, layout[0], args, state);
-    draw_tabs(frame, layout[1], tabs, state.active_tab);
-    draw_body(frame, layout[2], args, state, tabs);
+    draw_header(frame, layout[0], args, state, theme);
+    draw_tabs(frame, layout[1], tabs, state.active_tab, theme);
+    draw_body(frame, layout[2], args, state, tabs, theme);
 }
 
-fn draw_header(frame: &mut Frame<'_>, area: Rect, args: &UsageArgs, state: &LiveState) {
-    let title_style = Style::default()
-        .fg(Color::Cyan)
-        .add_modifier(Modifier::BOLD);
-    let dim_style = Style::default().fg(Color::DarkGray);
+fn draw_header(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    args: &UsageArgs,
+    state: &LiveState,
+    theme: TuiTheme,
+) {
+    let title_style = theme.accent_bold();
+    let dim_style = theme.dim_style();
 
     let provider_label = if args.providers.is_empty() {
         "auto".to_string()
@@ -184,7 +224,13 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, args: &UsageArgs, state: &Live
     frame.render_widget(header, area);
 }
 
-fn draw_tabs(frame: &mut Frame<'_>, area: Rect, tabs: &[AccountTab], active_tab: usize) {
+fn draw_tabs(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    tabs: &[AccountTab],
+    active_tab: usize,
+    theme: TuiTheme,
+) {
     let titles: Vec<Line<'static>> = tabs
         .iter()
         .map(|tab| Line::from(Span::raw(tab.label.clone())))
@@ -192,12 +238,8 @@ fn draw_tabs(frame: &mut Frame<'_>, area: Rect, tabs: &[AccountTab], active_tab:
     let tab_bar = Tabs::new(titles)
         .block(Block::default().borders(Borders::ALL).title("Accounts"))
         .select(active_tab)
-        .style(Style::default().fg(Color::DarkGray))
-        .highlight_style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
+        .style(theme.dim_style())
+        .highlight_style(theme.accent_bold())
         .divider(Span::raw(" | "));
     frame.render_widget(tab_bar, area);
 }
@@ -208,12 +250,13 @@ fn draw_body(
     args: &UsageArgs,
     state: &LiveState,
     tabs: &[AccountTab],
+    theme: TuiTheme,
 ) {
     let mut lines = Vec::new();
     if let Some(err) = &state.last_error {
         lines.push(Line::from(Span::styled(
             format!("error: {}", err),
-            Style::default().fg(Color::Red),
+            theme.alert_style(),
         )));
     }
 
@@ -238,7 +281,7 @@ fn draw_body(
             if !lines.is_empty() {
                 lines.push(Line::from(""));
             }
-            lines.extend(render_payload(payload, args));
+            lines.extend(render_payload(payload, args, theme));
             rendered_payloads += 1;
         }
     }
@@ -253,33 +296,34 @@ fn draw_body(
     frame.render_widget(body, area);
 }
 
-fn render_payload(payload: &ProviderPayload, args: &UsageArgs) -> Vec<Line<'static>> {
-    let header_style = Style::default()
-        .fg(Color::Yellow)
-        .add_modifier(Modifier::BOLD);
-    let dim_style = Style::default().fg(Color::DarkGray);
+fn render_payload(
+    payload: &ProviderPayload,
+    args: &UsageArgs,
+    theme: TuiTheme,
+) -> Vec<Line<'static>> {
+    let dim_style = theme.dim_style();
     let mut lines = Vec::new();
 
-    let header = provider_header(payload, header_style, dim_style);
+    let header = provider_header(payload, theme);
     lines.push(header);
 
     if let Some(error) = &payload.error {
         lines.push(Line::from(Span::styled(
             format!("error: {}", error.message),
-            Style::default().fg(Color::Red),
+            theme.alert_style(),
         )));
         return lines;
     }
 
     if let Some(usage) = &payload.usage {
         if let Some(primary) = usage.primary.as_ref() {
-            lines.push(rate_window_line("primary", primary));
+            lines.push(rate_window_line("primary", primary, theme));
         }
         if let Some(secondary) = usage.secondary.as_ref() {
-            lines.push(rate_window_line("secondary", secondary));
+            lines.push(rate_window_line("secondary", secondary, theme));
         }
         if let Some(tertiary) = usage.tertiary.as_ref() {
-            lines.push(rate_window_line("tertiary", tertiary));
+            lines.push(rate_window_line("tertiary", tertiary, theme));
         }
         if let Some(cost) = usage.provider_cost.as_ref() {
             lines.push(cost_line(cost));
@@ -308,9 +352,10 @@ fn render_payload(payload: &ProviderPayload, args: &UsageArgs) -> Vec<Line<'stat
 
 fn provider_header(
     payload: &ProviderPayload,
-    header_style: Style,
-    dim_style: Style,
+    theme: TuiTheme,
 ) -> Line<'static> {
+    let header_style = theme.accent_bold();
+    let dim_style = theme.dim_style();
     let mut label = payload.provider.clone();
     if let Some(version) = &payload.version {
         label.push(' ');
@@ -434,7 +479,7 @@ fn tab_label_for_payload(payload: &ProviderPayload) -> String {
     format!("{}: {}", payload.provider, account)
 }
 
-fn rate_window_line(label: &str, window: &RateWindow) -> Line<'static> {
+fn rate_window_line(label: &str, window: &RateWindow, theme: TuiTheme) -> Line<'static> {
     let bar = percent_bar(window.used_percent, 18);
     let mut parts = vec![format!(
         "{}: {:>5.1}% [{}]",
@@ -447,7 +492,7 @@ fn rate_window_line(label: &str, window: &RateWindow) -> Line<'static> {
         parts.push(format!("window {}m", minutes));
     }
 
-    let style = usage_style(window.used_percent);
+    let style = usage_style(window.used_percent, theme);
     Line::from(Span::styled(parts.join(" | "), style))
 }
 
@@ -465,13 +510,13 @@ fn cost_line(cost: &ProviderCostSnapshot) -> Line<'static> {
     Line::from(parts.join(" | "))
 }
 
-fn usage_style(percent: f64) -> Style {
+fn usage_style(percent: f64, theme: TuiTheme) -> Style {
     if percent >= 90.0 {
-        Style::default().fg(Color::Red)
+        theme.alert_style()
     } else if percent >= 75.0 {
-        Style::default().fg(Color::Yellow)
+        theme.accent_style()
     } else {
-        Style::default().fg(Color::Green)
+        Style::default()
     }
 }
 
