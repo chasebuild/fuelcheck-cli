@@ -25,6 +25,7 @@ mod kiro;
 mod vertexai;
 mod jetbrains;
 mod amp;
+mod warp;
 
 pub use claude::ClaudeProvider;
 pub use codex::CodexProvider;
@@ -40,6 +41,7 @@ pub use kiro::KiroProvider;
 pub use vertexai::VertexAIProvider;
 pub use jetbrains::JetBrainsProvider;
 pub use amp::AmpProvider;
+pub use warp::WarpProvider;
 pub(crate) use utils::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum)]
@@ -62,6 +64,7 @@ pub enum ProviderId {
     VertexAI,
     JetBrains,
     Amp,
+    Warp,
 }
 
 impl fmt::Display for ProviderId {
@@ -81,6 +84,7 @@ impl fmt::Display for ProviderId {
             ProviderId::VertexAI => "vertexai",
             ProviderId::JetBrains => "jetbrains",
             ProviderId::Amp => "amp",
+            ProviderId::Warp => "warp",
         };
         write!(f, "{}", label)
     }
@@ -103,6 +107,7 @@ impl ProviderId {
             ProviderId::VertexAI,
             ProviderId::JetBrains,
             ProviderId::Amp,
+            ProviderId::Warp,
         ]
     }
 }
@@ -125,6 +130,7 @@ pub enum ProviderSelector {
     VertexAI,
     JetBrains,
     Amp,
+    Warp,
     All,
     Both,
 }
@@ -148,6 +154,7 @@ impl ProviderSelector {
             ProviderSelector::VertexAI => vec![ProviderId::VertexAI],
             ProviderSelector::JetBrains => vec![ProviderId::JetBrains],
             ProviderSelector::Amp => vec![ProviderId::Amp],
+            ProviderSelector::Warp => vec![ProviderId::Warp],
         }
     }
 }
@@ -169,6 +176,7 @@ impl fmt::Display for ProviderSelector {
             ProviderSelector::VertexAI => "vertexai",
             ProviderSelector::JetBrains => "jetbrains",
             ProviderSelector::Amp => "amp",
+            ProviderSelector::Warp => "warp",
             ProviderSelector::All => "all",
             ProviderSelector::Both => "both",
         };
@@ -292,6 +300,7 @@ impl ProviderRegistry {
         providers.insert(ProviderId::VertexAI, Box::new(VertexAIProvider));
         providers.insert(ProviderId::JetBrains, Box::new(JetBrainsProvider));
         providers.insert(ProviderId::Amp, Box::new(AmpProvider));
+        providers.insert(ProviderId::Warp, Box::new(WarpProvider));
         Self { providers }
     }
 
