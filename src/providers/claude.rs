@@ -223,8 +223,7 @@ impl ClaudeOAuthCredentials {
             .ok_or_else(|| anyhow!("Claude OAuth missing access token"))?;
         let expires_at = oauth
             .expires_at
-            .map(|ms| DateTime::<Utc>::from_timestamp((ms / 1000.0) as i64, 0))
-            .flatten();
+            .and_then(|ms| DateTime::<Utc>::from_timestamp((ms / 1000.0) as i64, 0));
         Ok(Self {
             access_token,
             refresh_token: oauth.refresh_token,
@@ -366,16 +365,14 @@ struct WebAccountOrganization {
 
 async fn fetch_claude_oauth_usage() -> Result<UsageSnapshot> {
     let mut creds = ClaudeOAuthCredentials::load()?;
-    if creds.is_expired() {
-        if let Some(refresh_token) = creds.refresh_token.clone() {
-            if let Ok(updated) =
+    if creds.is_expired()
+        && let Some(refresh_token) = creds.refresh_token.clone()
+            && let Ok(updated) =
                 refresh_claude_token(&refresh_token, &creds.scopes, creds.rate_limit_tier.clone())
                     .await
             {
                 creds = updated;
             }
-        }
-    }
     fetch_claude_oauth_usage_with_creds(&creds).await
 }
 
@@ -548,12 +545,11 @@ fn oauth_extra_usage_cost(
         resets_at: None,
         updated_at: Utc::now(),
     };
-    if let Some(plan) = login_method {
-        if !plan.to_lowercase().contains("enterprise") && cost.limit >= 1000.0 {
+    if let Some(plan) = login_method
+        && !plan.to_lowercase().contains("enterprise") && cost.limit >= 1000.0 {
             cost.used /= 100.0;
             cost.limit /= 100.0;
         }
-    }
     Some(cost)
 }
 
@@ -779,14 +775,13 @@ fn select_claude_membership<'a>(
     org_id: Option<&str>,
 ) -> Option<&'a WebAccountMembership> {
     let memberships = memberships?;
-    if let Some(org_id) = org_id {
-        if let Some(match_org) = memberships
+    if let Some(org_id) = org_id
+        && let Some(match_org) = memberships
             .iter()
             .find(|m| m.organization.uuid.as_deref() == Some(org_id))
         {
             return Some(match_org);
         }
-    }
     memberships.first()
 }
 

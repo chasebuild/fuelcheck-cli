@@ -114,7 +114,7 @@ fn map_copilot_usage(response: CopilotUsageResponse) -> UsageSnapshot {
     };
 
     UsageSnapshot {
-        primary: primary.or_else(|| {
+        primary: primary.or({
             Some(RateWindow {
                 used_percent: 0.0,
                 window_minutes: None,

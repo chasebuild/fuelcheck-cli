@@ -120,14 +120,12 @@ async fn fetch_gemini_usage() -> Result<UsageSnapshot> {
             "Gemini not logged in. Run `gemini` to authenticate."
         ));
     }
-    if let Some(expiry) = creds.expiry_date {
-        if expiry < Utc::now() {
-            if let Some(refresh) = creds.refresh_token.clone() {
+    if let Some(expiry) = creds.expiry_date
+        && expiry < Utc::now()
+            && let Some(refresh) = creds.refresh_token.clone() {
                 let new_token = refresh_access_token(&refresh).await?;
                 creds.access_token = Some(new_token);
             }
-        }
-    }
 
     let access_token = creds
         .access_token
@@ -260,15 +258,14 @@ fn extract_oauth_client() -> Result<(String, String)> {
     let secret_re = Regex::new(r#"OAUTH_CLIENT_SECRET\s*=\s*['"]([\w\-]+)['"]"#).unwrap();
 
     for path in oauth_paths {
-        if let Ok(content) = fs::read_to_string(&path) {
-            if let (Some(id_cap), Some(secret_cap)) =
+        if let Ok(content) = fs::read_to_string(&path)
+            && let (Some(id_cap), Some(secret_cap)) =
                 (client_re.captures(&content), secret_re.captures(&content))
             {
                 let client_id = id_cap.get(1).unwrap().as_str().to_string();
                 let client_secret = secret_cap.get(1).unwrap().as_str().to_string();
                 return Ok((client_id, client_secret));
             }
-        }
     }
 
     Err(anyhow!("Could not locate Gemini CLI OAuth credentials"))
@@ -336,11 +333,10 @@ async fn discover_project_id(access_token: &str) -> Result<Option<String>> {
             if project_id.starts_with("gen-lang-client") {
                 return Ok(Some(project_id.to_string()));
             }
-            if let Some(labels) = project.get("labels").and_then(|v| v.as_object()) {
-                if labels.contains_key("generative-language") {
+            if let Some(labels) = project.get("labels").and_then(|v| v.as_object())
+                && labels.contains_key("generative-language") {
                     return Ok(Some(project_id.to_string()));
                 }
-            }
         }
     }
     Ok(None)
@@ -486,8 +482,8 @@ fn extract_claims(id_token: Option<&str>) -> (Option<String>, Option<String>) {
     let decoded = base64::engine::general_purpose::STANDARD
         .decode(padded)
         .ok();
-    if let Some(decoded) = decoded {
-        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&decoded) {
+    if let Some(decoded) = decoded
+        && let Ok(json) = serde_json::from_slice::<serde_json::Value>(&decoded) {
             let email = json
                 .get("email")
                 .and_then(|v| v.as_str())
@@ -498,7 +494,6 @@ fn extract_claims(id_token: Option<&str>) -> (Option<String>, Option<String>) {
                 .map(|s| s.to_string());
             return (email, hd);
         }
-    }
     (None, None)
 }
 

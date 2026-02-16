@@ -181,21 +181,18 @@ fn adc_credentials_path() -> Option<PathBuf> {
 }
 
 fn load_project_id() -> Option<String> {
-    if let Ok(value) = std::env::var("GOOGLE_CLOUD_PROJECT") {
-        if !value.trim().is_empty() {
+    if let Ok(value) = std::env::var("GOOGLE_CLOUD_PROJECT")
+        && !value.trim().is_empty() {
             return Some(value);
         }
-    }
-    if let Ok(value) = std::env::var("GCLOUD_PROJECT") {
-        if !value.trim().is_empty() {
+    if let Ok(value) = std::env::var("GCLOUD_PROJECT")
+        && !value.trim().is_empty() {
             return Some(value);
         }
-    }
-    if let Ok(value) = std::env::var("CLOUDSDK_CORE_PROJECT") {
-        if !value.trim().is_empty() {
+    if let Ok(value) = std::env::var("CLOUDSDK_CORE_PROJECT")
+        && !value.trim().is_empty() {
             return Some(value);
         }
-    }
     let config_path = if let Ok(config_dir) = std::env::var("CLOUDSDK_CONFIG") {
         let trimmed = config_dir.trim();
         if trimmed.is_empty() {
@@ -400,14 +397,13 @@ struct QuotaKey {
 fn aggregate_series(series: &[MonitoringTimeSeries]) -> HashMap<QuotaKey, f64> {
     let mut buckets: HashMap<QuotaKey, f64> = HashMap::new();
     for entry in series {
-        if let Some(key) = quota_key(entry) {
-            if let Some(value) = max_point_value(&entry.points) {
+        if let Some(key) = quota_key(entry)
+            && let Some(value) = max_point_value(&entry.points) {
                 let existing = buckets.get(&key).copied().unwrap_or(0.0);
                 if value > existing {
                     buckets.insert(key, value);
                 }
             }
-        }
     }
     buckets
 }

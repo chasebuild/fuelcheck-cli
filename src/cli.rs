@@ -591,7 +591,7 @@ pub async fn run_setup(args: SetupArgs) -> Result<()> {
 }
 
 pub(crate) fn cli_print_usage(
-    args: &UsageArgs,
+    _args: &UsageArgs,
     outputs: Vec<ProviderPayload>,
     prefs: &OutputPreferences,
 ) -> Result<()> {
@@ -680,15 +680,14 @@ pub(crate) fn format_payload_text(payload: &ProviderPayload, prefs: &OutputPrefe
                     &format_credits(credits.remaining),
                     prefs.use_color(),
                 ));
-            } else if let Some(dashboard) = &payload.openai_dashboard {
-                if let Some(credits) = dashboard.credits_remaining {
+            } else if let Some(dashboard) = &payload.openai_dashboard
+                && let Some(credits) = dashboard.credits_remaining {
                     lines.push(label_line(
                         "Credits",
                         &format_credits(credits),
                         prefs.use_color(),
                     ));
                 }
-            }
         }
         if let Some(account) = usage.account_email.clone().or_else(|| {
             usage
@@ -702,11 +701,9 @@ pub(crate) fn format_payload_text(payload: &ProviderPayload, prefs: &OutputPrefe
             .login_method
             .clone()
             .or_else(|| usage.identity.as_ref().and_then(|i| i.login_method.clone()))
-        {
-            if !plan.is_empty() {
+            && !plan.is_empty() {
                 lines.push(label_line("Plan", &plan, prefs.use_color()));
             }
-        }
     }
 
     if let Some(status) = &payload.status {
@@ -872,7 +869,7 @@ fn usage_pace_weekly(window: &crate::model::RateWindow) -> Option<UsagePaceSumma
         return None;
     }
     let now = chrono::Utc::now();
-    let duration_secs = (minutes as i64) * 60;
+    let duration_secs = minutes * 60;
     let time_until_reset = (resets_at - now).num_seconds();
     if time_until_reset <= 0 || time_until_reset > duration_secs {
         return None;
@@ -1069,11 +1066,10 @@ fn status_line(status: &crate::model::ProviderStatusPayload) -> String {
         crate::model::ProviderStatusIndicator::Unknown => "Status unknown",
     };
     let mut text = format!("Status: {}", label);
-    if let Some(desc) = &status.description {
-        if !desc.trim().is_empty() {
+    if let Some(desc) = &status.description
+        && !desc.trim().is_empty() {
             text.push_str(&format!(" - {}", desc));
         }
-    }
     text
 }
 
@@ -1119,11 +1115,10 @@ pub fn exit_code_for_error(err: &anyhow::Error) -> i32 {
             CliError::UnsupportedSource(_, _) => 3,
         };
     }
-    if let Some(req_err) = err.downcast_ref::<reqwest::Error>() {
-        if req_err.is_timeout() {
+    if let Some(req_err) = err.downcast_ref::<reqwest::Error>()
+        && req_err.is_timeout() {
             return 4;
         }
-    }
     if err.downcast_ref::<tokio::time::error::Elapsed>().is_some() {
         return 4;
     }

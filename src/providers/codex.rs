@@ -376,11 +376,10 @@ async fn codex_oauth_fetch(creds: &CodexOAuthCredentials) -> Result<CodexUsageRe
         .header("Authorization", format!("Bearer {}", creds.access_token))
         .header("User-Agent", "FuelcheckCLI")
         .header("Accept", "application/json");
-    if let Some(account_id) = &creds.account_id {
-        if !account_id.trim().is_empty() {
+    if let Some(account_id) = &creds.account_id
+        && !account_id.trim().is_empty() {
             req = req.header("ChatGPT-Account-Id", account_id.clone());
         }
-    }
     let resp = req.send().await?;
     let status = resp.status();
     let data = resp.bytes().await?;
@@ -467,7 +466,7 @@ fn map_codex_usage(
     };
 
     Ok(UsageSnapshot {
-        primary: primary.or_else(|| {
+        primary: primary.or({
             Some(RateWindow {
                 used_percent: 0.0,
                 window_minutes: None,
@@ -502,8 +501,8 @@ fn map_codex_credits(usage: &CodexUsageResponse) -> Option<CreditsSnapshot> {
 
 fn make_window(window: Option<&WindowSnapshot>) -> Option<RateWindow> {
     let window = window?;
-    let resets_at = DateTime::<Utc>::from_timestamp(window.reset_at as i64, 0);
-    let reset_description = resets_at.map(|dt| format_reset_description(dt));
+    let resets_at = DateTime::<Utc>::from_timestamp(window.reset_at, 0);
+    let reset_description = resets_at.map(format_reset_description);
     Some(RateWindow {
         used_percent: window.used_percent as f64,
         window_minutes: Some(window.limit_window_seconds / 60),
@@ -544,11 +543,10 @@ fn resolve_account_email(id_token: Option<&str>) -> Option<String> {
 }
 
 fn resolve_plan(usage: &CodexUsageResponse, id_token: Option<&str>) -> Option<String> {
-    if let Some(plan) = &usage.plan_type {
-        if !plan.trim().is_empty() {
+    if let Some(plan) = &usage.plan_type
+        && !plan.trim().is_empty() {
             return Some(plan.clone());
         }
-    }
     let payload = parse_jwt_payload(id_token)?;
     payload
         .get("https://api.openai.com/auth")

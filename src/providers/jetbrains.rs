@@ -76,8 +76,8 @@ fn find_jetbrains_quota_file() -> Option<PathBuf> {
                 .ok()?;
         for entry in walker.filter_map(Result::ok) {
             let path = entry.path().to_path_buf();
-            if let Ok(meta) = std::fs::metadata(&path) {
-                if let Ok(modified) = meta.modified() {
+            if let Ok(meta) = std::fs::metadata(&path)
+                && let Ok(modified) = meta.modified() {
                     let replace = match &best {
                         Some((_, best_time)) => modified > *best_time,
                         None => true,
@@ -86,7 +86,6 @@ fn find_jetbrains_quota_file() -> Option<PathBuf> {
                         best = Some((path.clone(), modified));
                     }
                 }
-            }
         }
     }
     best.map(|(path, _)| path)
@@ -169,14 +168,13 @@ fn html_unescape(value: &str) -> String {
 fn derive_jetbrains_identity(path: &Path) -> Option<String> {
     let mut current = path.parent();
     while let Some(dir) = current {
-        if dir.ends_with("options") {
-            if let Some(parent) = dir.parent() {
+        if dir.ends_with("options")
+            && let Some(parent) = dir.parent() {
                 return parent
                     .file_name()
                     .and_then(|n| n.to_str())
                     .map(|s| s.to_string());
             }
-        }
         current = dir.parent();
     }
     None

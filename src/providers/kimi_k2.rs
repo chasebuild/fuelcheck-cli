@@ -86,7 +86,7 @@ fn map_kimi_k2_usage(json: &Value, headers: &reqwest::header::HeaderMap) -> Resu
         json,
         &["creditsConsumed", "consumed", "used", "credits_used"],
     );
-    let total = find_number(json, &["totalCredits", "total", "creditsTotal"]).or_else(|| {
+    let total = find_number(json, &["totalCredits", "total", "creditsTotal"]).or({
         match (remaining, consumed) {
             (Some(r), Some(c)) => Some(r + c),
             _ => None,
@@ -134,11 +134,10 @@ fn map_kimi_k2_usage(json: &Value, headers: &reqwest::header::HeaderMap) -> Resu
 
 fn find_number(value: &Value, keys: &[&str]) -> Option<f64> {
     for key in keys {
-        if let Some(val) = value.get(*key) {
-            if let Some(num) = value_to_f64(val) {
+        if let Some(val) = value.get(*key)
+            && let Some(num) = value_to_f64(val) {
                 return Some(num);
             }
-        }
     }
     None
 }

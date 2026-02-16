@@ -118,11 +118,10 @@ struct FreeTierUsage {
 fn extract_free_tier_usage(html: &str) -> Option<FreeTierUsage> {
     let tokens = ["freeTierUsage", "getFreeTierUsage"];
     for token in tokens {
-        if let Some(object) = extract_object_named(html, token) {
-            if let Some(usage) = parse_free_tier_object(&object) {
+        if let Some(object) = extract_object_named(html, token)
+            && let Some(usage) = parse_free_tier_object(&object) {
                 return Some(usage);
             }
-        }
     }
     None
 }
@@ -145,17 +144,15 @@ fn extract_object_named(text: &str, token: &str) -> Option<String> {
             } else if c == '"' {
                 in_string = false;
             }
-        } else {
-            if c == '"' {
-                in_string = true;
-            } else if c == '{' {
-                depth += 1;
-            } else if c == '}' {
-                depth -= 1;
-                if depth == 0 {
-                    end = Some(brace_index + i);
-                    break;
-                }
+        } else if c == '"' {
+            in_string = true;
+        } else if c == '{' {
+            depth += 1;
+        } else if c == '}' {
+            depth -= 1;
+            if depth == 0 {
+                end = Some(brace_index + i);
+                break;
             }
         }
     }
