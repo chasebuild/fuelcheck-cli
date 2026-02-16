@@ -22,6 +22,7 @@ mod kimi;
 mod kimi_k2;
 mod copilot;
 mod kiro;
+mod vertexai;
 
 pub use claude::ClaudeProvider;
 pub use codex::CodexProvider;
@@ -34,6 +35,7 @@ pub use kimi::KimiProvider;
 pub use kimi_k2::KimiK2Provider;
 pub use copilot::CopilotProvider;
 pub use kiro::KiroProvider;
+pub use vertexai::VertexAIProvider;
 pub(crate) use utils::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum)]
@@ -53,6 +55,7 @@ pub enum ProviderId {
     KimiK2,
     Copilot,
     Kiro,
+    VertexAI,
 }
 
 impl fmt::Display for ProviderId {
@@ -69,6 +72,7 @@ impl fmt::Display for ProviderId {
             ProviderId::KimiK2 => "kimik2",
             ProviderId::Copilot => "copilot",
             ProviderId::Kiro => "kiro",
+            ProviderId::VertexAI => "vertexai",
         };
         write!(f, "{}", label)
     }
@@ -88,6 +92,7 @@ impl ProviderId {
             ProviderId::KimiK2,
             ProviderId::Copilot,
             ProviderId::Kiro,
+            ProviderId::VertexAI,
         ]
     }
 }
@@ -107,6 +112,7 @@ pub enum ProviderSelector {
     KimiK2,
     Copilot,
     Kiro,
+    VertexAI,
     All,
     Both,
 }
@@ -127,6 +133,7 @@ impl ProviderSelector {
             ProviderSelector::KimiK2 => vec![ProviderId::KimiK2],
             ProviderSelector::Copilot => vec![ProviderId::Copilot],
             ProviderSelector::Kiro => vec![ProviderId::Kiro],
+            ProviderSelector::VertexAI => vec![ProviderId::VertexAI],
         }
     }
 }
@@ -145,6 +152,7 @@ impl fmt::Display for ProviderSelector {
             ProviderSelector::KimiK2 => "kimik2",
             ProviderSelector::Copilot => "copilot",
             ProviderSelector::Kiro => "kiro",
+            ProviderSelector::VertexAI => "vertexai",
             ProviderSelector::All => "all",
             ProviderSelector::Both => "both",
         };
@@ -265,6 +273,7 @@ impl ProviderRegistry {
         providers.insert(ProviderId::KimiK2, Box::new(KimiK2Provider));
         providers.insert(ProviderId::Copilot, Box::new(CopilotProvider));
         providers.insert(ProviderId::Kiro, Box::new(KiroProvider));
+        providers.insert(ProviderId::VertexAI, Box::new(VertexAIProvider));
         Self { providers }
     }
 
