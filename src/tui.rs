@@ -5,6 +5,7 @@ use crate::providers::ProviderRegistry;
 use anyhow::Result;
 use chrono::{DateTime, Local, Utc};
 use crossterm::cursor::{Hide, Show};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -13,8 +14,9 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Paragraph, Tabs, Wrap};
 use ratatui::{Frame, Terminal};
+use std::collections::HashSet;
 use std::io;
 use std::time::Duration;
 
@@ -38,8 +40,10 @@ pub async fn run_usage_watch(
 
     let mut state = LiveState::default();
     let mut ticker = tokio::time::interval(Duration::from_secs(args.interval));
+    let mut ui_tick = tokio::time::interval(Duration::from_millis(100));
     let ctrl_c = tokio::signal::ctrl_c();
     tokio::pin!(ctrl_c);
+    let mut needs_redraw = true;
 
     loop {
         tokio::select! {
@@ -56,10 +60,26 @@ pub async fn run_usage_watch(
                         state.last_error = Some(err.to_string());
                     }
                 }
+                needs_redraw = true;
+            }
+            _ = ui_tick.tick() => {
+                if event::poll(Duration::from_millis(0))? {
+                    if let Event::Key(key) = event::read()? {
+                        let tabs = build_account_tabs(&state.outputs);
+                        if handle_key_event(key, &mut state, &tabs) {
+                            needs_redraw = true;
+                        }
+                    }
+                }
             }
         }
 
-        terminal.draw(|frame| draw(frame, &args, &state))?;
+        if needs_redraw {
+            let tabs = build_account_tabs(&state.outputs);
+            sync_active_tab(&mut state, &tabs);
+            terminal.draw(|frame| draw(frame, &args, &state, &tabs))?;
+            needs_redraw = false;
+        }
     }
 
     Ok(())
@@ -71,6 +91,14 @@ struct LiveState {
     last_updated: Option<DateTime<Utc>>,
     last_error: Option<String>,
     refresh_count: u64,
+    active_tab: usize,
+    active_tab_key: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct AccountTab {
+    key: String,
+    label: String,
 }
 
 struct TuiGuard;
@@ -90,15 +118,20 @@ impl Drop for TuiGuard {
     }
 }
 
-fn draw(frame: &mut Frame<'_>, args: &UsageArgs, state: &LiveState) {
+fn draw(frame: &mut Frame<'_>, args: &UsageArgs, state: &LiveState, tabs: &[AccountTab]) {
     let area = frame.size();
     let layout = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(4), Constraint::Min(0)])
+        .constraints([
+            Constraint::Length(4),
+            Constraint::Length(3),
+            Constraint::Min(0),
+        ])
         .split(area);
 
     draw_header(frame, layout[0], args, state);
-    draw_body(frame, layout[1], args, state);
+    draw_tabs(frame, layout[1], tabs, state.active_tab);
+    draw_body(frame, layout[2], args, state, tabs);
 }
 
 fn draw_header(frame: &mut Frame<'_>, area: Rect, args: &UsageArgs, state: &LiveState) {
@@ -135,6 +168,8 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, args: &UsageArgs, state: &Live
             Span::styled(" | ", dim_style),
             Span::styled(source_label, dim_style),
             Span::styled(" | ", dim_style),
+            Span::styled("Tabs: ←/→ or Tab", dim_style),
+            Span::styled(" | ", dim_style),
             Span::styled("Ctrl+C to exit", dim_style),
         ]),
         Line::from(vec![Span::styled(update_label, dim_style)]),
@@ -150,7 +185,31 @@ fn draw_header(frame: &mut Frame<'_>, area: Rect, args: &UsageArgs, state: &Live
     frame.render_widget(header, area);
 }
 
-fn draw_body(frame: &mut Frame<'_>, area: Rect, args: &UsageArgs, state: &LiveState) {
+fn draw_tabs(frame: &mut Frame<'_>, area: Rect, tabs: &[AccountTab], active_tab: usize) {
+    let titles: Vec<Line<'static>> = tabs
+        .iter()
+        .map(|tab| Line::from(Span::raw(tab.label.clone())))
+        .collect();
+    let tab_bar = Tabs::new(titles)
+        .block(Block::default().borders(Borders::ALL).title("Accounts"))
+        .select(active_tab)
+        .style(Style::default().fg(Color::DarkGray))
+        .highlight_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+        .divider(Span::raw(" | "));
+    frame.render_widget(tab_bar, area);
+}
+
+fn draw_body(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    args: &UsageArgs,
+    state: &LiveState,
+    tabs: &[AccountTab],
+) {
     let mut lines = Vec::new();
     if let Some(err) = &state.last_error {
         lines.push(Line::from(Span::styled(
@@ -159,17 +218,33 @@ fn draw_body(frame: &mut Frame<'_>, area: Rect, args: &UsageArgs, state: &LiveSt
         )));
     }
 
+    let selected_tab = tabs
+        .get(state.active_tab)
+        .or_else(|| tabs.first())
+        .map(|tab| tab.key.as_str());
+    let mut rendered_payloads = 0usize;
+
     if state.outputs.is_empty() {
         if lines.is_empty() {
             lines.push(Line::from("Waiting for data..."));
         }
     } else {
         for payload in &state.outputs {
+            if let Some(key) = selected_tab {
+                if key != "all" && tab_key_for_payload(payload) != key {
+                    continue;
+                }
+            }
             if !lines.is_empty() {
                 lines.push(Line::from(""));
             }
             lines.extend(render_payload(payload, args));
+            rendered_payloads += 1;
         }
+    }
+
+    if rendered_payloads == 0 && state.last_error.is_none() {
+        lines.push(Line::from("No data for this account yet."));
     }
 
     let body = Paragraph::new(lines)
@@ -270,6 +345,93 @@ fn resolve_account(payload: &ProviderPayload) -> Option<String> {
                 .as_ref()
                 .and_then(|u| u.account_organization.clone())
         })
+}
+
+fn build_account_tabs(outputs: &[ProviderPayload]) -> Vec<AccountTab> {
+    let mut tabs = Vec::new();
+    tabs.push(AccountTab {
+        key: "all".to_string(),
+        label: "All".to_string(),
+    });
+
+    let mut seen = HashSet::new();
+    for payload in outputs {
+        let key = tab_key_for_payload(payload);
+        if seen.insert(key.clone()) {
+            tabs.push(AccountTab {
+                key,
+                label: tab_label_for_payload(payload),
+            });
+        }
+    }
+
+    tabs
+}
+
+fn sync_active_tab(state: &mut LiveState, tabs: &[AccountTab]) {
+    if let Some(active_key) = state.active_tab_key.as_ref() {
+        if let Some(index) = tabs.iter().position(|tab| tab.key == *active_key) {
+            state.active_tab = index;
+            return;
+        }
+    }
+
+    if tabs.is_empty() {
+        state.active_tab = 0;
+        state.active_tab_key = None;
+        return;
+    }
+
+    if state.active_tab >= tabs.len() {
+        state.active_tab = tabs.len().saturating_sub(1);
+    }
+    state.active_tab_key = tabs.get(state.active_tab).map(|tab| tab.key.clone());
+}
+
+fn handle_key_event(key: KeyEvent, state: &mut LiveState, tabs: &[AccountTab]) -> bool {
+    if key.kind != KeyEventKind::Press || tabs.is_empty() {
+        return false;
+    }
+
+    let last_index = tabs.len().saturating_sub(1);
+    let mut next_index = None;
+    match key.code {
+        KeyCode::Right | KeyCode::Tab => {
+            next_index = Some((state.active_tab + 1) % tabs.len());
+        }
+        KeyCode::Left | KeyCode::BackTab => {
+            if state.active_tab == 0 {
+                next_index = Some(last_index);
+            } else {
+                next_index = Some(state.active_tab - 1);
+            }
+        }
+        KeyCode::Home => {
+            next_index = Some(0);
+        }
+        KeyCode::End => {
+            next_index = Some(last_index);
+        }
+        _ => {}
+    }
+
+    if let Some(index) = next_index {
+        state.active_tab = index;
+        state.active_tab_key = tabs.get(index).map(|tab| tab.key.clone());
+        return true;
+    }
+
+    false
+}
+
+fn tab_key_for_payload(payload: &ProviderPayload) -> String {
+    let account = resolve_account(payload).unwrap_or_else(|| "default".to_string());
+    format!("{}::{}", payload.provider, account)
+}
+
+fn tab_label_for_payload(payload: &ProviderPayload) -> String {
+    let account = resolve_account(payload).unwrap_or_else(|| "default".to_string());
+    format!("{}: {}", payload.provider, account)
 }
 
 fn rate_window_line(label: &str, window: &RateWindow) -> Line<'static> {
