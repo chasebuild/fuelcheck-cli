@@ -5,7 +5,7 @@ use crate::providers::ProviderRegistry;
 use anyhow::Result;
 use chrono::{DateTime, Local, Utc};
 use crossterm::cursor::{Hide, Show};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -79,6 +79,7 @@ pub async fn run_usage_watch(
     let ctrl_c = tokio::signal::ctrl_c();
     tokio::pin!(ctrl_c);
     let mut needs_redraw = true;
+    let mut should_quit = false;
 
     loop {
         tokio::select! {
@@ -100,12 +101,20 @@ pub async fn run_usage_watch(
             _ = ui_tick.tick() => {
                 if event::poll(Duration::from_millis(0))?
                     && let Event::Key(key) = event::read()? {
-                        let tabs = build_account_tabs(&state.outputs);
-                        if handle_key_event(key, &mut state, &tabs) {
-                            needs_redraw = true;
+                        if is_ctrl_c(key) {
+                            should_quit = true;
+                        } else {
+                            let tabs = build_account_tabs(&state.outputs);
+                            if handle_key_event(key, &mut state, &tabs) {
+                                needs_redraw = true;
+                            }
                         }
                     }
             }
+        }
+
+        if should_quit {
+            break;
         }
 
         if needs_redraw {
@@ -467,6 +476,12 @@ fn handle_key_event(key: KeyEvent, state: &mut LiveState, tabs: &[AccountTab]) -
     }
 
     false
+}
+
+fn is_ctrl_c(key: KeyEvent) -> bool {
+    key.kind == KeyEventKind::Press
+        && key.code == KeyCode::Char('c')
+        && key.modifiers.contains(KeyModifiers::CONTROL)
 }
 
 fn tab_key_for_payload(payload: &ProviderPayload) -> String {
