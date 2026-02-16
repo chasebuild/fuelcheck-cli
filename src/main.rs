@@ -18,5 +18,6 @@ async fn main() -> Result<()> {
         Command::Usage(args) => cli::run_usage(args, &registry).await,
         Command::Cost(args) => cli::run_cost(args, &registry).await,
         Command::Config(cmd) => cli::run_config(cmd).await,
+        Command::Setup(args) => cli::run_setup(args).await,
     }
 }

@@ -21,6 +21,8 @@ pub enum Command {
     Cost(CostArgs),
     /// Validate or dump config.
     Config(ConfigCommandArgs),
+    /// Setup config with detected credentials.
+    Setup(SetupArgs),
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -92,6 +94,22 @@ pub struct CostArgs {
     /// JSON output only (no extra text).
     #[arg(long)]
     pub json_only: bool,
+    /// Explicit config path.
+    #[arg(long)]
+    pub config: Option<PathBuf>,
+}
+
+#[derive(Parser, Debug, Clone)]
+pub struct SetupArgs {
+    /// Overwrite existing config file if present.
+    #[arg(long)]
+    pub force: bool,
+    /// Enable all providers regardless of detected credentials.
+    #[arg(long)]
+    pub enable_all: bool,
+    /// Provide Cursor cookie header explicitly (skips browser import).
+    #[arg(long)]
+    pub cursor_cookie: Option<String>,
     /// Explicit config path.
     #[arg(long)]
     pub config: Option<PathBuf>,
@@ -198,6 +216,98 @@ pub struct ConfigCommandArgs {
 
 pub async fn run_config(cmd: ConfigCommandArgs) -> Result<()> {
     cmd.command.execute().await
+}
+
+pub async fn run_setup(args: SetupArgs) -> Result<()> {
+    let config_path = Config::path(args.config.as_ref())?;
+    if config_path.exists() && !args.force {
+        return Err(anyhow::anyhow!(
+            "Config already exists at {}. Use --force to overwrite.",
+            config_path.display()
+        ));
+    }
+
+    let mut providers = Vec::new();
+    let detected = crate::config::DetectResult::detect();
+
+    let mut enable = |id: ProviderId, enabled: bool, mut extra: crate::config::ProviderConfig| {
+        extra.id = id;
+        extra.enabled = Some(enabled);
+        providers.push(extra);
+    };
+
+    let enable_all = args.enable_all;
+
+    // Codex
+    enable(
+        ProviderId::Codex,
+        enable_all || detected.codex_auth,
+        crate::config::ProviderConfig {
+            id: ProviderId::Codex,
+            enabled: Some(enable_all || detected.codex_auth),
+            source: Some(crate::providers::SourcePreference::Oauth),
+            ..crate::config::ProviderConfig::default_provider(ProviderId::Codex)
+        },
+    );
+
+    // Claude
+    enable(
+        ProviderId::Claude,
+        enable_all || detected.claude_oauth,
+        crate::config::ProviderConfig {
+            id: ProviderId::Claude,
+            enabled: Some(enable_all || detected.claude_oauth),
+            source: Some(crate::providers::SourcePreference::Oauth),
+            ..crate::config::ProviderConfig::default_provider(ProviderId::Claude)
+        },
+    );
+
+    // Gemini
+    enable(
+        ProviderId::Gemini,
+        enable_all || detected.gemini_oauth,
+        crate::config::ProviderConfig {
+            id: ProviderId::Gemini,
+            enabled: Some(enable_all || detected.gemini_oauth),
+            source: Some(crate::providers::SourcePreference::Api),
+            ..crate::config::ProviderConfig::default_provider(ProviderId::Gemini)
+        },
+    );
+
+    // Cursor
+    let mut cursor_cfg = crate::config::ProviderConfig {
+        id: ProviderId::Cursor,
+        enabled: Some(enable_all || args.cursor_cookie.is_some()),
+        source: Some(crate::providers::SourcePreference::Web),
+        ..crate::config::ProviderConfig::default_provider(ProviderId::Cursor)
+    };
+    if let Some(cookie) = args.cursor_cookie.clone() {
+        cursor_cfg.cookie_header = Some(cookie);
+    }
+    enable(ProviderId::Cursor, cursor_cfg.enabled.unwrap_or(false), cursor_cfg);
+
+    let config = Config {
+        version: Some(1),
+        providers: Some(providers),
+    };
+
+    config.save(args.config.as_ref())?;
+
+    println!("Setup complete. Config written to {}", config_path.display());
+    if !detected.codex_auth {
+        println!("Codex: run `codex` to authenticate (creates ~/.codex/auth.json).");
+    }
+    if !detected.claude_oauth {
+        println!("Claude: run `claude` to authenticate (creates ~/.claude/.credentials.json).");
+    }
+    if !detected.gemini_oauth {
+        println!("Gemini: run `gemini` to authenticate (creates ~/.gemini/oauth_creds.json).");
+    }
+    if args.cursor_cookie.is_none() {
+        println!("Cursor: add cookie header via `fuelcheck-cli setup --cursor-cookie \"...\"`.");
+    }
+
+    Ok(())
 }
 
 fn cli_print_usage(args: &UsageArgs, outputs: Vec<ProviderPayload>) -> Result<()> {
