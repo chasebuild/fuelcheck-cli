@@ -75,6 +75,12 @@ pub struct UsageArgs {
     /// Debug flag for Antigravity plan data.
     #[arg(long)]
     pub antigravity_plan_debug: bool,
+    /// Watch usage + cost in a live TUI.
+    #[arg(long)]
+    pub watch: bool,
+    /// Refresh interval (seconds) for --watch.
+    #[arg(long, default_value = "10")]
+    pub interval: u64,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -121,6 +127,23 @@ pub async fn run_usage(args: UsageArgs, registry: &ProviderRegistry) -> Result<(
     if args.json {
         args.format = OutputFormat::Json;
     }
+    if args.watch {
+        if args.format == OutputFormat::Json || args.json_only {
+            return Err(anyhow::anyhow!("--watch only supports text output"));
+        }
+        return crate::tui::run_usage_watch(args, registry, config).await;
+    }
+
+    let outputs = collect_usage_outputs(&args, &config, registry).await?;
+
+    cli_print_usage(&args, outputs)
+}
+
+pub(crate) async fn collect_usage_outputs(
+    args: &UsageArgs,
+    config: &Config,
+    registry: &ProviderRegistry,
+) -> Result<Vec<ProviderPayload>> {
     let provider_ids = if args.providers.is_empty() {
         config.enabled_providers_or_default()
     } else {
@@ -133,7 +156,7 @@ pub async fn run_usage(args: UsageArgs, registry: &ProviderRegistry) -> Result<(
             .get(&provider_id)
             .ok_or_else(|| CliError::UnknownProvider(provider_id.to_string()))?;
         match provider
-            .fetch_usage(&args, &config, args.source)
+            .fetch_usage(args, config, args.source)
             .await
             .with_context(|| format!("provider {}", provider_id))
         {
@@ -150,7 +173,7 @@ pub async fn run_usage(args: UsageArgs, registry: &ProviderRegistry) -> Result<(
         }
     }
 
-    cli_print_usage(&args, outputs)
+    Ok(outputs)
 }
 
 pub async fn run_cost(args: CostArgs, registry: &ProviderRegistry) -> Result<()> {
@@ -205,6 +228,8 @@ pub async fn run_cost(args: CostArgs, registry: &ProviderRegistry) -> Result<()>
         account_index: None,
         all_accounts: false,
         antigravity_plan_debug: false,
+        watch: false,
+        interval: 10,
     }, outputs)
 }
 
@@ -340,32 +365,120 @@ fn format_payload_text(payload: &ProviderPayload) -> String {
     }
 
     let mut lines = Vec::new();
-    let header = if let Some(version) = &payload.version {
+    let mut header = if let Some(version) = &payload.version {
         format!("{} {} ({})", payload.provider, version, payload.source)
     } else {
         format!("{} ({})", payload.provider, payload.source)
     };
+    if let Some(account) = resolve_account_label(payload) {
+        header.push_str(&format!(" | account: {}", account));
+    }
+    if let Some(plan) = payload
+        .usage
+        .as_ref()
+        .and_then(|usage| usage.login_method.clone())
+    {
+        header.push_str(&format!(" | plan: {}", plan));
+    }
     lines.push(header);
 
     if let Some(usage) = &payload.usage {
         if let Some(primary) = &usage.primary {
-            lines.push(format!("  primary: {:.2}%", primary.used_percent));
+            lines.push(format_rate_window_text("primary", primary));
         }
         if let Some(secondary) = &usage.secondary {
-            lines.push(format!("  secondary: {:.2}%", secondary.used_percent));
+            lines.push(format_rate_window_text("secondary", secondary));
         }
         if let Some(tertiary) = &usage.tertiary {
-            lines.push(format!("  tertiary: {:.2}%", tertiary.used_percent));
+            lines.push(format_rate_window_text("tertiary", tertiary));
         }
         if let Some(cost) = &usage.provider_cost {
-            lines.push(format!(
-                "  cost: {:.2}/{:.2} {}",
-                cost.used, cost.limit, cost.currency_code
-            ));
+            lines.push(format_provider_cost_text(cost));
+        } else {
+            lines.push("  cost: n/a".to_string());
+        }
+        if let Some(credits) = &payload.credits {
+            lines.push(format!("  credits: {:.2}", credits.remaining));
+        } else if let Some(dashboard) = &payload.openai_dashboard {
+            if let Some(credits) = dashboard.credits_remaining {
+                lines.push(format!("  credits: {:.2}", credits));
+            }
+        }
+        lines.push(format!("  updated: {}", format_timestamp(usage.updated_at)));
+    }
+
+    if payload.usage.is_none() && payload.credits.is_some() {
+        if let Some(credits) = &payload.credits {
+            lines.push(format!("  credits: {:.2}", credits.remaining));
         }
     }
 
     lines.join("\n")
+}
+
+fn format_rate_window_text(label: &str, window: &crate::model::RateWindow) -> String {
+    let bar = percent_bar(window.used_percent, 20);
+    let mut parts = vec![format!(
+        "  {}: {:>5.1}% [{}]",
+        label, window.used_percent, bar
+    )];
+    if let Some(desc) = &window.reset_description {
+        parts.push(desc.clone());
+    }
+    if let Some(minutes) = window.window_minutes {
+        parts.push(format!("window {}m", minutes));
+    }
+    parts.join(" | ")
+}
+
+fn resolve_account_label(payload: &ProviderPayload) -> Option<String> {
+    payload
+        .account
+        .clone()
+        .or_else(|| payload.usage.as_ref().and_then(|u| u.account_email.clone()))
+        .or_else(|| {
+            payload
+                .usage
+                .as_ref()
+                .and_then(|u| u.account_organization.clone())
+        })
+}
+
+fn format_provider_cost_text(cost: &crate::model::ProviderCostSnapshot) -> String {
+    let mut parts = vec![format!(
+        "  cost: {:.2}/{:.2} {}",
+        cost.used, cost.limit, cost.currency_code
+    )];
+    if let Some(period) = &cost.period {
+        parts.push(period.clone());
+    }
+    if let Some(resets_at) = cost.resets_at {
+        parts.push(format!("resets {}", format_timestamp(resets_at)));
+    }
+    parts.join(" | ")
+}
+
+fn percent_bar(percent: f64, width: usize) -> String {
+    if width == 0 {
+        return String::new();
+    }
+    let clamped = percent.clamp(0.0, 100.0);
+    let filled = ((clamped / 100.0) * width as f64).round() as usize;
+    let filled = filled.min(width);
+    let mut bar = String::with_capacity(width);
+    for _ in 0..filled {
+        bar.push('#');
+    }
+    for _ in filled..width {
+        bar.push('-');
+    }
+    bar
+}
+
+fn format_timestamp(dt: chrono::DateTime<chrono::Utc>) -> String {
+    dt.with_timezone(&chrono::Local)
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string()
 }
 
 fn format_error_chain(err: &anyhow::Error) -> String {

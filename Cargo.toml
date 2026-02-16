@@ -9,11 +9,13 @@ async-trait = "0.1"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
+crossterm = "0.27"
 directories = "5.0"
 globwalk = "0.9"
+ratatui = { version = "0.26", default-features = false, features = ["crossterm"] }
 regex = "1.10"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
-tokio = { version = "1.36", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.36", features = ["rt-multi-thread", "macros", "signal", "time"] }

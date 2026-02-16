@@ -3,6 +3,7 @@ mod config;
 mod errors;
 mod model;
 mod providers;
+mod tui;
 
 use anyhow::Result;
 use clap::Parser;

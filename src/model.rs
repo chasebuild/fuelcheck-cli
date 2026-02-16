@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use clap::ValueEnum;
 use serde::Serialize;
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
     Text,
     Json,
