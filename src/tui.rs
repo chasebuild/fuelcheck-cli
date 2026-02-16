@@ -230,9 +230,11 @@ fn draw_body(
     } else {
         for payload in &state.outputs {
             if let Some(key) = selected_tab
-                && key != "all" && tab_key_for_payload(payload) != key {
-                    continue;
-                }
+                && key != "all"
+                && tab_key_for_payload(payload) != key
+            {
+                continue;
+            }
             if !lines.is_empty() {
                 lines.push(Line::from(""));
             }
@@ -288,9 +290,10 @@ fn render_payload(payload: &ProviderPayload, args: &UsageArgs) -> Vec<Line<'stat
             if let Some(credits) = payload.credits.as_ref() {
                 lines.push(Line::from(format!("credits: {:.2}", credits.remaining)));
             } else if let Some(dashboard) = payload.openai_dashboard.as_ref()
-                && let Some(credits) = dashboard.credits_remaining {
-                    lines.push(Line::from(format!("credits: {:.2}", credits)));
-                }
+                && let Some(credits) = dashboard.credits_remaining
+            {
+                lines.push(Line::from(format!("credits: {:.2}", credits)));
+            }
         }
         lines.push(Line::from(format!(
             "updated: {}",
@@ -367,10 +370,11 @@ fn build_account_tabs(outputs: &[ProviderPayload]) -> Vec<AccountTab> {
 
 fn sync_active_tab(state: &mut LiveState, tabs: &[AccountTab]) {
     if let Some(active_key) = state.active_tab_key.as_ref()
-        && let Some(index) = tabs.iter().position(|tab| tab.key == *active_key) {
-            state.active_tab = index;
-            return;
-        }
+        && let Some(index) = tabs.iter().position(|tab| tab.key == *active_key)
+    {
+        state.active_tab = index;
+        return;
+    }
 
     if tabs.is_empty() {
         state.active_tab = 0;

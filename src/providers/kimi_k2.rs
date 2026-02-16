@@ -135,9 +135,10 @@ fn map_kimi_k2_usage(json: &Value, headers: &reqwest::header::HeaderMap) -> Resu
 fn find_number(value: &Value, keys: &[&str]) -> Option<f64> {
     for key in keys {
         if let Some(val) = value.get(*key)
-            && let Some(num) = value_to_f64(val) {
-                return Some(num);
-            }
+            && let Some(num) = value_to_f64(val)
+        {
+            return Some(num);
+        }
     }
     None
 }

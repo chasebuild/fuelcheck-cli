@@ -132,9 +132,10 @@ fn extract_cookie_token(cookie: &str) -> Option<String> {
         let key = kv.next()?.trim();
         let value = kv.next()?.trim();
         if (key.eq_ignore_ascii_case("access_token") || key.eq_ignore_ascii_case("accessToken"))
-            && !value.is_empty() {
-                return Some(value.to_string());
-            }
+            && !value.is_empty()
+        {
+            return Some(value.to_string());
+        }
     }
     None
 }
@@ -199,12 +200,13 @@ fn map_minimax_usage(payload: MiniMaxCodingPlanPayload) -> Result<UsageSnapshot>
         .and_then(|d| d.base_resp.as_ref())
         .or(payload.base_resp.as_ref());
     if let Some(status) = base_resp.and_then(|b| b.status_code)
-        && status != 0 {
-            let msg = base_resp
-                .and_then(|b| b.status_msg.clone())
-                .unwrap_or_else(|| format!("status_code {}", status));
-            return Err(anyhow!("MiniMax API error: {}", msg));
-        }
+        && status != 0
+    {
+        let msg = base_resp
+            .and_then(|b| b.status_msg.clone())
+            .unwrap_or_else(|| format!("status_code {}", status));
+        return Err(anyhow!("MiniMax API error: {}", msg));
+    }
 
     let model_remains: Vec<MiniMaxModelRemains> = data
         .and_then(|d| d.model_remains.clone())

@@ -377,9 +377,10 @@ async fn codex_oauth_fetch(creds: &CodexOAuthCredentials) -> Result<CodexUsageRe
         .header("User-Agent", "FuelcheckCLI")
         .header("Accept", "application/json");
     if let Some(account_id) = &creds.account_id
-        && !account_id.trim().is_empty() {
-            req = req.header("ChatGPT-Account-Id", account_id.clone());
-        }
+        && !account_id.trim().is_empty()
+    {
+        req = req.header("ChatGPT-Account-Id", account_id.clone());
+    }
     let resp = req.send().await?;
     let status = resp.status();
     let data = resp.bytes().await?;
@@ -544,9 +545,10 @@ fn resolve_account_email(id_token: Option<&str>) -> Option<String> {
 
 fn resolve_plan(usage: &CodexUsageResponse, id_token: Option<&str>) -> Option<String> {
     if let Some(plan) = &usage.plan_type
-        && !plan.trim().is_empty() {
-            return Some(plan.clone());
-        }
+        && !plan.trim().is_empty()
+    {
+        return Some(plan.clone());
+    }
     let payload = parse_jwt_payload(id_token)?;
     payload
         .get("https://api.openai.com/auth")

@@ -76,9 +76,10 @@ fn resolve_zai_quota_url(cfg: Option<&crate::config::ProviderConfig>) -> String 
         return format!("{}/api/monitor/usage/quota/limit", normalize_host(&host));
     }
     if let Some(region) = cfg.and_then(|c| c.region.clone())
-        && (region.to_lowercase().contains("cn") || region.to_lowercase().contains("bigmodel")) {
-            return "https://open.bigmodel.cn/api/monitor/usage/quota/limit".to_string();
-        }
+        && (region.to_lowercase().contains("cn") || region.to_lowercase().contains("bigmodel"))
+    {
+        return "https://open.bigmodel.cn/api/monitor/usage/quota/limit".to_string();
+    }
     "https://api.z.ai/api/monitor/usage/quota/limit".to_string()
 }
 
@@ -201,12 +202,13 @@ fn parse_window_minutes(limit: &Value) -> Option<i64> {
 fn find_string(value: &Value, keys: &[&str]) -> Option<String> {
     for key in keys {
         if let Some(val) = value.get(*key)
-            && let Some(s) = val.as_str() {
-                let trimmed = s.trim();
-                if !trimmed.is_empty() {
-                    return Some(trimmed.to_string());
-                }
+            && let Some(s) = val.as_str()
+        {
+            let trimmed = s.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
             }
+        }
     }
     None
 }
@@ -214,9 +216,10 @@ fn find_string(value: &Value, keys: &[&str]) -> Option<String> {
 fn find_number(value: &Value, keys: &[&str]) -> Option<f64> {
     for key in keys {
         if let Some(val) = value.get(*key)
-            && let Some(num) = value_to_f64(val) {
-                return Some(num);
-            }
+            && let Some(num) = value_to_f64(val)
+        {
+            return Some(num);
+        }
     }
     None
 }
@@ -224,9 +227,10 @@ fn find_number(value: &Value, keys: &[&str]) -> Option<f64> {
 fn find_epoch(value: &Value, keys: &[&str]) -> Option<chrono::DateTime<Utc>> {
     for key in keys {
         if let Some(val) = value.get(*key)
-            && let Some(num) = value_to_i64(val) {
-                return crate::providers::parse_epoch(num);
-            }
+            && let Some(num) = value_to_i64(val)
+        {
+            return crate::providers::parse_epoch(num);
+        }
     }
     None
 }
@@ -235,9 +239,10 @@ fn find_rfc3339(value: &Value, keys: &[&str]) -> Option<chrono::DateTime<Utc>> {
     for key in keys {
         if let Some(val) = value.get(*key)
             && let Some(s) = val.as_str()
-                && let Some(dt) = crate::providers::parse_rfc3339(s) {
-                    return Some(dt);
-                }
+            && let Some(dt) = crate::providers::parse_rfc3339(s)
+        {
+            return Some(dt);
+        }
     }
     None
 }

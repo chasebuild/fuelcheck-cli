@@ -119,9 +119,10 @@ fn extract_free_tier_usage(html: &str) -> Option<FreeTierUsage> {
     let tokens = ["freeTierUsage", "getFreeTierUsage"];
     for token in tokens {
         if let Some(object) = extract_object_named(html, token)
-            && let Some(usage) = parse_free_tier_object(&object) {
-                return Some(usage);
-            }
+            && let Some(usage) = parse_free_tier_object(&object)
+        {
+            return Some(usage);
+        }
     }
     None
 }

@@ -122,10 +122,11 @@ async fn fetch_gemini_usage() -> Result<UsageSnapshot> {
     }
     if let Some(expiry) = creds.expiry_date
         && expiry < Utc::now()
-            && let Some(refresh) = creds.refresh_token.clone() {
-                let new_token = refresh_access_token(&refresh).await?;
-                creds.access_token = Some(new_token);
-            }
+        && let Some(refresh) = creds.refresh_token.clone()
+    {
+        let new_token = refresh_access_token(&refresh).await?;
+        creds.access_token = Some(new_token);
+    }
 
     let access_token = creds
         .access_token
@@ -261,11 +262,11 @@ fn extract_oauth_client() -> Result<(String, String)> {
         if let Ok(content) = fs::read_to_string(&path)
             && let (Some(id_cap), Some(secret_cap)) =
                 (client_re.captures(&content), secret_re.captures(&content))
-            {
-                let client_id = id_cap.get(1).unwrap().as_str().to_string();
-                let client_secret = secret_cap.get(1).unwrap().as_str().to_string();
-                return Ok((client_id, client_secret));
-            }
+        {
+            let client_id = id_cap.get(1).unwrap().as_str().to_string();
+            let client_secret = secret_cap.get(1).unwrap().as_str().to_string();
+            return Ok((client_id, client_secret));
+        }
     }
 
     Err(anyhow!("Could not locate Gemini CLI OAuth credentials"))
@@ -334,9 +335,10 @@ async fn discover_project_id(access_token: &str) -> Result<Option<String>> {
                 return Ok(Some(project_id.to_string()));
             }
             if let Some(labels) = project.get("labels").and_then(|v| v.as_object())
-                && labels.contains_key("generative-language") {
-                    return Ok(Some(project_id.to_string()));
-                }
+                && labels.contains_key("generative-language")
+            {
+                return Ok(Some(project_id.to_string()));
+            }
         }
     }
     Ok(None)
@@ -483,17 +485,18 @@ fn extract_claims(id_token: Option<&str>) -> (Option<String>, Option<String>) {
         .decode(padded)
         .ok();
     if let Some(decoded) = decoded
-        && let Ok(json) = serde_json::from_slice::<serde_json::Value>(&decoded) {
-            let email = json
-                .get("email")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            let hd = json
-                .get("hd")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            return (email, hd);
-        }
+        && let Ok(json) = serde_json::from_slice::<serde_json::Value>(&decoded)
+    {
+        let email = json
+            .get("email")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let hd = json
+            .get("hd")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        return (email, hd);
+    }
     (None, None)
 }
 

@@ -681,13 +681,14 @@ pub(crate) fn format_payload_text(payload: &ProviderPayload, prefs: &OutputPrefe
                     prefs.use_color(),
                 ));
             } else if let Some(dashboard) = &payload.openai_dashboard
-                && let Some(credits) = dashboard.credits_remaining {
-                    lines.push(label_line(
-                        "Credits",
-                        &format_credits(credits),
-                        prefs.use_color(),
-                    ));
-                }
+                && let Some(credits) = dashboard.credits_remaining
+            {
+                lines.push(label_line(
+                    "Credits",
+                    &format_credits(credits),
+                    prefs.use_color(),
+                ));
+            }
         }
         if let Some(account) = usage.account_email.clone().or_else(|| {
             usage
@@ -701,9 +702,10 @@ pub(crate) fn format_payload_text(payload: &ProviderPayload, prefs: &OutputPrefe
             .login_method
             .clone()
             .or_else(|| usage.identity.as_ref().and_then(|i| i.login_method.clone()))
-            && !plan.is_empty() {
-                lines.push(label_line("Plan", &plan, prefs.use_color()));
-            }
+            && !plan.is_empty()
+        {
+            lines.push(label_line("Plan", &plan, prefs.use_color()));
+        }
     }
 
     if let Some(status) = &payload.status {
@@ -1067,9 +1069,10 @@ fn status_line(status: &crate::model::ProviderStatusPayload) -> String {
     };
     let mut text = format!("Status: {}", label);
     if let Some(desc) = &status.description
-        && !desc.trim().is_empty() {
-            text.push_str(&format!(" - {}", desc));
-        }
+        && !desc.trim().is_empty()
+    {
+        text.push_str(&format!(" - {}", desc));
+    }
     text
 }
 
@@ -1116,9 +1119,10 @@ pub fn exit_code_for_error(err: &anyhow::Error) -> i32 {
         };
     }
     if let Some(req_err) = err.downcast_ref::<reqwest::Error>()
-        && req_err.is_timeout() {
-            return 4;
-        }
+        && req_err.is_timeout()
+    {
+        return 4;
+    }
     if err.downcast_ref::<tokio::time::error::Elapsed>().is_some() {
         return 4;
     }

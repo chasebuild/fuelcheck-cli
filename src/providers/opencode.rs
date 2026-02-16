@@ -153,9 +153,10 @@ async fn fetch_server_text(
         .header("accept", "text/javascript, application/json;q=0.9, */*;q=0.8")
         .timeout(std::time::Duration::from_secs(timeout.max(5)));
     if method != "GET"
-        && let Some(args) = args {
-            req = req.header("content-type", "application/json").json(args);
-        }
+        && let Some(args) = args
+    {
+        req = req.header("content-type", "application/json").json(args);
+    }
     let resp = req.send().await?;
     let status = resp.status();
     let body = resp.text().await?;
@@ -180,10 +181,11 @@ fn server_request_url(
     );
     if method == "GET"
         && let Some(args) = args
-            && let Ok(encoded) = serde_json::to_string(args) {
-                url.push_str("&x-args=");
-                url.push_str(&urlencoding::encode(&encoded));
-            }
+        && let Ok(encoded) = serde_json::to_string(args)
+    {
+        url.push_str("&x-args=");
+        url.push_str(&urlencoding::encode(&encoded));
+    }
     url
 }
 
@@ -209,9 +211,10 @@ fn parse_opencode_usage(text: &str) -> Result<UsageSnapshot> {
         return Ok(snapshot);
     }
     if let Some(value) = extract_json_object(text)
-        && let Some(snapshot) = parse_opencode_usage_from_value(&value) {
-            return Ok(snapshot);
-        }
+        && let Some(snapshot) = parse_opencode_usage_from_value(&value)
+    {
+        return Ok(snapshot);
+    }
     Err(anyhow!("OpenCode usage data missing"))
 }
 
@@ -257,9 +260,10 @@ fn find_usage_value(value: &Value) -> Option<UsageSnapshot> {
                 rolling.get("resetInSec").and_then(|v| v.as_i64()),
                 weekly.get("usagePercent").and_then(|v| v.as_f64()),
                 weekly.get("resetInSec").and_then(|v| v.as_i64()),
-            ) {
-                return Some(build_usage_snapshot(rp, wp, rr, wr));
-            }
+            )
+        {
+            return Some(build_usage_snapshot(rp, wp, rr, wr));
+        }
         for val in obj.values() {
             if let Some(snapshot) = find_usage_value(val) {
                 return Some(snapshot);

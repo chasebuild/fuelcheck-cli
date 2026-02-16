@@ -216,12 +216,13 @@ async fn fetch_factory_subscription_usage(
 
     let mut body = serde_json::json!({ "useCache": true });
     if let Some(user_id) = user_id
-        && let Some(obj) = body.as_object_mut() {
-            obj.insert(
-                "userId".to_string(),
-                serde_json::Value::String(user_id.to_string()),
-            );
-        }
+        && let Some(obj) = body.as_object_mut()
+    {
+        obj.insert(
+            "userId".to_string(),
+            serde_json::Value::String(user_id.to_string()),
+        );
+    }
 
     let resp = request.json(&body).send().await?;
     let status = resp.status();
@@ -334,9 +335,10 @@ fn build_snapshot(auth: FactoryAuthResponse, usage: FactoryUsageResponse) -> Usa
 fn calculate_usage_percent(used: i64, allowance: i64, api_ratio: Option<f64>) -> f64 {
     let unlimited_threshold: i64 = 1_000_000_000_000;
     if let Some(ratio) = api_ratio
-        && let Some(percent) = percent_from_api_ratio(ratio, allowance, unlimited_threshold) {
-            return percent;
-        }
+        && let Some(percent) = percent_from_api_ratio(ratio, allowance, unlimited_threshold)
+    {
+        return percent;
+    }
 
     if allowance > unlimited_threshold {
         let reference_tokens = 100_000_000_f64;
@@ -392,9 +394,10 @@ fn format_login_method(tier: Option<&str>, plan: Option<&str>) -> Option<String>
         parts.push(format!("Factory {}", capitalize_first(tier)));
     }
     if let Some(plan) = plan.map(|p| p.trim()).filter(|p| !p.is_empty())
-        && !plan.to_lowercase().contains("factory") {
-            parts.push(plan.to_string());
-        }
+        && !plan.to_lowercase().contains("factory")
+    {
+        parts.push(plan.to_string());
+    }
     if parts.is_empty() {
         None
     } else {
