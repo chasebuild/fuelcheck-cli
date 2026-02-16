@@ -13,6 +13,11 @@ Fuelcheck CLI is a Rust command-line tool that fetches usage and cost data from 
 - Configurable sources per provider (oauth, web, api, cli, local).
 
 **Install**
+Install from crates.io:
+```bash
+cargo install fuelcheck-cli
+```
+
 Build from source:
 ```bash
 cargo build --release
