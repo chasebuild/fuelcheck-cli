@@ -2,8 +2,8 @@ use crate::cli::UsageArgs;
 use crate::config::Config;
 use crate::errors::CliError;
 use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot};
-use crate::providers::{env_var_nonempty, parse_rfc3339, Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use crate::providers::{Provider, ProviderId, SourcePreference, env_var_nonempty, parse_rfc3339};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::Value;
@@ -31,7 +31,9 @@ impl Provider for WarpProvider {
             .as_ref()
             .and_then(|c| c.api_key.clone())
             .or_else(|| env_var_nonempty(&["WARP_API_KEY", "WARP_TOKEN"]))
-            .ok_or_else(|| anyhow!("Warp API key missing. Set provider api_key or WARP_API_KEY."))?;
+            .ok_or_else(|| {
+                anyhow!("Warp API key missing. Set provider api_key or WARP_API_KEY.")
+            })?;
 
         let selected = match source {
             SourcePreference::Auto => SourcePreference::Api,

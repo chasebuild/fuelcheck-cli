@@ -2,8 +2,11 @@ use crate::cli::UsageArgs;
 use crate::config::Config;
 use crate::errors::CliError;
 use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot};
-use crate::providers::{env_var_nonempty, normalize_host, value_to_f64, value_to_i64, Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use crate::providers::{
+    Provider, ProviderId, SourcePreference, env_var_nonempty, normalize_host, value_to_f64,
+    value_to_i64,
+};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::Value;
@@ -31,7 +34,9 @@ impl Provider for ZaiProvider {
             .as_ref()
             .and_then(|c| c.api_key.clone())
             .or_else(|| env_var_nonempty(&["Z_AI_API_KEY"]))
-            .ok_or_else(|| anyhow!("z.ai API token missing. Set provider api_key or Z_AI_API_KEY."))?;
+            .ok_or_else(|| {
+                anyhow!("z.ai API token missing. Set provider api_key or Z_AI_API_KEY.")
+            })?;
 
         let selected = match source {
             SourcePreference::Auto => SourcePreference::Api,
@@ -98,7 +103,8 @@ fn parse_zai_usage(json: &Value) -> Result<UsageSnapshot> {
         let kind_lower = kind.to_lowercase();
         if primary.is_none() && (kind_lower.contains("token") || kind_lower.contains("tokens")) {
             primary = Some(window);
-        } else if secondary.is_none() && (kind_lower.contains("time") || kind_lower.contains("mcp")) {
+        } else if secondary.is_none() && (kind_lower.contains("time") || kind_lower.contains("mcp"))
+        {
             secondary = Some(window);
         } else if primary.is_none() {
             primary = Some(window);
@@ -127,14 +133,17 @@ fn parse_zai_usage(json: &Value) -> Result<UsageSnapshot> {
 }
 
 fn parse_zai_limit(limit: &Value) -> Option<RateWindow> {
-    let used_percent = find_number(limit, &[
-        "usedPercent",
-        "used_percent",
-        "usagePercent",
-        "usage_percent",
-        "percentUsed",
-        "percent_used",
-    ])
+    let used_percent = find_number(
+        limit,
+        &[
+            "usedPercent",
+            "used_percent",
+            "usagePercent",
+            "usage_percent",
+            "percentUsed",
+            "percent_used",
+        ],
+    )
     .or_else(|| {
         let used = find_number(limit, &["used", "usage", "current", "consumed"]);
         let total = find_number(limit, &["limit", "quota", "total", "max"]);
@@ -151,8 +160,11 @@ fn parse_zai_limit(limit: &Value) -> Option<RateWindow> {
     })?;
 
     let window_minutes = parse_window_minutes(limit);
-    let resets_at = find_epoch(limit, &["nextResetTime", "resetTime", "resetAt", "next_reset_time"])
-        .or_else(|| find_rfc3339(limit, &["resetTime", "resetsAt", "reset_at"]));
+    let resets_at = find_epoch(
+        limit,
+        &["nextResetTime", "resetTime", "resetAt", "next_reset_time"],
+    )
+    .or_else(|| find_rfc3339(limit, &["resetTime", "resetsAt", "reset_at"]));
     Some(RateWindow {
         used_percent,
         window_minutes,

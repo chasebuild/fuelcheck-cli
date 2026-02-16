@@ -2,8 +2,8 @@ use crate::cli::UsageArgs;
 use crate::config::Config;
 use crate::errors::CliError;
 use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot};
-use crate::providers::{parse_rfc3339, Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use crate::providers::{Provider, ProviderId, SourcePreference, parse_rfc3339};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
@@ -113,7 +113,9 @@ impl VertexAIOAuthCredentials {
     }
 }
 
-async fn refresh_vertex_token(creds: &VertexAIOAuthCredentials) -> Result<VertexAIOAuthCredentials> {
+async fn refresh_vertex_token(
+    creds: &VertexAIOAuthCredentials,
+) -> Result<VertexAIOAuthCredentials> {
     let client = reqwest::Client::new();
     let resp = client
         .post("https://oauth2.googleapis.com/token")
@@ -129,7 +131,10 @@ async fn refresh_vertex_token(creds: &VertexAIOAuthCredentials) -> Result<Vertex
     let status = resp.status();
     let data = resp.bytes().await?;
     if !status.is_success() {
-        return Err(anyhow!("Vertex AI token refresh failed (HTTP {})", status.as_u16()));
+        return Err(anyhow!(
+            "Vertex AI token refresh failed (HTTP {})",
+            status.as_u16()
+        ));
     }
     let json: serde_json::Value = serde_json::from_slice(&data)?;
     let access_token = json
@@ -231,9 +236,13 @@ fn extract_email_from_jwt(token: &str) -> Option<String> {
     if remainder > 0 {
         payload.push_str(&"=".repeat(4 - remainder));
     }
-    let decoded = base64::engine::general_purpose::STANDARD.decode(payload).ok()?;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(payload)
+        .ok()?;
     let json: serde_json::Value = serde_json::from_slice(&decoded).ok()?;
-    json.get("email").and_then(|v| v.as_str()).map(|s| s.to_string())
+    json.get("email")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
 }
 
 #[derive(Debug)]
@@ -312,11 +321,17 @@ async fn fetch_time_series(
         let status = resp.status();
         let data = resp.bytes().await?;
         if status.as_u16() == 401 || status.as_u16() == 403 {
-            return Err(anyhow!("Vertex AI unauthorized. Re-run gcloud auth application-default login."));
+            return Err(anyhow!(
+                "Vertex AI unauthorized. Re-run gcloud auth application-default login."
+            ));
         }
         if !status.is_success() {
             let body = String::from_utf8_lossy(&data);
-            return Err(anyhow!("Vertex AI monitoring error (HTTP {}): {}", status.as_u16(), body));
+            return Err(anyhow!(
+                "Vertex AI monitoring error (HTTP {}): {}",
+                status.as_u16(),
+                body
+            ));
         }
         let decoded: MonitoringTimeSeriesResponse = serde_json::from_slice(&data)?;
         if let Some(series) = decoded.time_series {
@@ -403,10 +418,7 @@ fn quota_key(series: &MonitoringTimeSeries) -> Option<QuotaKey> {
         .get("quota_metric")
         .or_else(|| resource_labels.get("quota_id"))?
         .to_string();
-    let limit_name = metric_labels
-        .get("limit_name")
-        .cloned()
-        .unwrap_or_default();
+    let limit_name = metric_labels.get("limit_name").cloned().unwrap_or_default();
     let location = resource_labels
         .get("location")
         .cloned()
@@ -419,7 +431,10 @@ fn quota_key(series: &MonitoringTimeSeries) -> Option<QuotaKey> {
 }
 
 fn max_point_value(points: &[MonitoringPoint]) -> Option<f64> {
-    points.iter().filter_map(point_value).max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+    points
+        .iter()
+        .filter_map(point_value)
+        .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
 }
 
 fn point_value(point: &MonitoringPoint) -> Option<f64> {

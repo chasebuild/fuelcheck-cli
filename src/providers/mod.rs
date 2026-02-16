@@ -10,41 +10,41 @@ use std::collections::HashMap;
 use std::fmt;
 use std::time::Duration;
 
+mod amp;
 mod claude;
 mod codex;
+mod copilot;
 mod cursor;
 mod factory;
 mod gemini;
-mod utils;
-mod zai;
-mod minimax;
+mod jetbrains;
 mod kimi;
 mod kimi_k2;
-mod copilot;
 mod kiro;
-mod vertexai;
-mod jetbrains;
-mod amp;
-mod warp;
+mod minimax;
 mod opencode;
+mod utils;
+mod vertexai;
+mod warp;
+mod zai;
 
+pub use amp::AmpProvider;
 pub use claude::ClaudeProvider;
 pub use codex::CodexProvider;
+pub use copilot::CopilotProvider;
 pub use cursor::CursorProvider;
 pub use factory::FactoryProvider;
 pub use gemini::GeminiProvider;
-pub use zai::ZaiProvider;
-pub use minimax::MiniMaxProvider;
+pub use jetbrains::JetBrainsProvider;
 pub use kimi::KimiProvider;
 pub use kimi_k2::KimiK2Provider;
-pub use copilot::CopilotProvider;
 pub use kiro::KiroProvider;
-pub use vertexai::VertexAIProvider;
-pub use jetbrains::JetBrainsProvider;
-pub use amp::AmpProvider;
-pub use warp::WarpProvider;
+pub use minimax::MiniMaxProvider;
 pub use opencode::OpenCodeProvider;
 pub(crate) use utils::*;
+pub use vertexai::VertexAIProvider;
+pub use warp::WarpProvider;
+pub use zai::ZaiProvider;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]

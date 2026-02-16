@@ -2,8 +2,8 @@ use crate::cli::UsageArgs;
 use crate::config::Config;
 use crate::errors::CliError;
 use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot};
-use crate::providers::{parse_rfc3339, Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use crate::providers::{Provider, ProviderId, SourcePreference, parse_rfc3339};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::Utc;
 use globwalk::GlobWalkerBuilder;
@@ -37,7 +37,8 @@ impl Provider for JetBrainsProvider {
             return Err(CliError::UnsupportedSource(self.id(), selected.to_string()).into());
         }
 
-        let file = find_jetbrains_quota_file().ok_or_else(|| anyhow!("JetBrains quota file not found"))?;
+        let file =
+            find_jetbrains_quota_file().ok_or_else(|| anyhow!("JetBrains quota file not found"))?;
         let contents = std::fs::read_to_string(&file)?;
         let usage = parse_jetbrains_quota(&contents, &file)?;
         Ok(self.ok_output("local", Some(usage)))
@@ -48,8 +49,16 @@ fn find_jetbrains_quota_file() -> Option<PathBuf> {
     let home = directories::BaseDirs::new()?.home_dir().to_path_buf();
     let mut roots = Vec::new();
     if cfg!(target_os = "macos") {
-        roots.push(home.join("Library").join("Application Support").join("JetBrains"));
-        roots.push(home.join("Library").join("Application Support").join("Google"));
+        roots.push(
+            home.join("Library")
+                .join("Application Support")
+                .join("JetBrains"),
+        );
+        roots.push(
+            home.join("Library")
+                .join("Application Support")
+                .join("Google"),
+        );
     } else {
         roots.push(home.join(".config").join("JetBrains"));
         roots.push(home.join(".config").join("Google"));
@@ -60,10 +69,11 @@ fn find_jetbrains_quota_file() -> Option<PathBuf> {
         if !root.exists() {
             continue;
         }
-        let walker = GlobWalkerBuilder::from_patterns(&root, &["**/options/AIAssistantQuotaManager2.xml"])
-            .case_insensitive(true)
-            .build()
-            .ok()?;
+        let walker =
+            GlobWalkerBuilder::from_patterns(&root, &["**/options/AIAssistantQuotaManager2.xml"])
+                .case_insensitive(true)
+                .build()
+                .ok()?;
         for entry in walker.filter_map(Result::ok) {
             let path = entry.path().to_path_buf();
             if let Ok(meta) = std::fs::metadata(&path) {
@@ -88,8 +98,7 @@ fn parse_jetbrains_quota(contents: &str, path: &Path) -> Result<UsageSnapshot> {
     let next_refill = extract_attribute_json(contents, "nextRefill");
 
     let quota_json: Value = serde_json::from_str(&quota_info)?;
-    let next_json: Option<Value> = next_refill
-        .and_then(|raw| serde_json::from_str(&raw).ok());
+    let next_json: Option<Value> = next_refill.and_then(|raw| serde_json::from_str(&raw).ok());
 
     let maximum = quota_json
         .get("maximum")
@@ -162,7 +171,10 @@ fn derive_jetbrains_identity(path: &Path) -> Option<String> {
     while let Some(dir) = current {
         if dir.ends_with("options") {
             if let Some(parent) = dir.parent() {
-                return parent.file_name().and_then(|n| n.to_str()).map(|s| s.to_string());
+                return parent
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string());
             }
         }
         current = dir.parent();

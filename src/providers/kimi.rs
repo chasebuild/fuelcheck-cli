@@ -2,8 +2,8 @@ use crate::cli::UsageArgs;
 use crate::config::Config;
 use crate::errors::CliError;
 use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot};
-use crate::providers::{env_var_nonempty, parse_rfc3339, Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use crate::providers::{Provider, ProviderId, SourcePreference, env_var_nonempty, parse_rfc3339};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::Utc;
 use serde::Deserialize;
@@ -31,7 +31,9 @@ impl Provider for KimiProvider {
             .as_ref()
             .and_then(|c| c.api_key.clone())
             .or_else(|| env_var_nonempty(&["KIMI_AUTH_TOKEN"]))
-            .ok_or_else(|| anyhow!("Kimi auth token missing. Set provider api_key or KIMI_AUTH_TOKEN."))?;
+            .ok_or_else(|| {
+                anyhow!("Kimi auth token missing. Set provider api_key or KIMI_AUTH_TOKEN.")
+            })?;
 
         let selected = match source {
             SourcePreference::Auto => SourcePreference::Api,
@@ -146,7 +148,10 @@ fn make_kimi_window(limit: &KimiUsageLimit) -> Option<RateWindow> {
         .and_then(|detail| make_kimi_window_from_detail(detail, window_minutes))
 }
 
-fn make_kimi_window_from_detail(detail: &KimiUsageDetail, window_minutes: Option<i64>) -> Option<RateWindow> {
+fn make_kimi_window_from_detail(
+    detail: &KimiUsageDetail,
+    window_minutes: Option<i64>,
+) -> Option<RateWindow> {
     let used = detail.used.as_ref()?.trim().parse::<f64>().ok()?;
     let limit = detail.limit.as_ref()?.trim().parse::<f64>().ok()?;
     if limit <= 0.0 {

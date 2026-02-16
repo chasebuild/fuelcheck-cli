@@ -2,8 +2,8 @@ use crate::cli::UsageArgs;
 use crate::config::Config;
 use crate::errors::CliError;
 use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot};
-use crate::providers::{env_var_nonempty, Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use crate::providers::{Provider, ProviderId, SourcePreference, env_var_nonempty};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::Utc;
 use regex::Regex;
@@ -39,7 +39,9 @@ impl Provider for AmpProvider {
             .as_ref()
             .and_then(|c| c.cookie_header.clone())
             .or_else(|| env_var_nonempty(&["AMP_COOKIE", "AMP_COOKIE_HEADER"]))
-            .ok_or_else(|| anyhow!("Amp cookie header missing. Set provider cookie_header or AMP_COOKIE."))?;
+            .ok_or_else(|| {
+                anyhow!("Amp cookie header missing. Set provider cookie_header or AMP_COOKIE.")
+            })?;
 
         let client = reqwest::Client::new();
         let resp = client

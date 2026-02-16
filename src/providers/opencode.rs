@@ -2,8 +2,8 @@ use crate::cli::UsageArgs;
 use crate::config::Config;
 use crate::errors::CliError;
 use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot};
-use crate::providers::{env_var_nonempty, Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use crate::providers::{Provider, ProviderId, SourcePreference, env_var_nonempty};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::Utc;
 use regex::Regex;
@@ -41,7 +41,9 @@ impl Provider for OpenCodeProvider {
             .as_ref()
             .and_then(|c| c.cookie_header.clone())
             .or_else(|| env_var_nonempty(&["OPENCODE_COOKIE", "OPENCODE_COOKIE_HEADER"]))
-            .ok_or_else(|| anyhow!("OpenCode cookie header missing. Set provider cookie_header."))?;
+            .ok_or_else(|| {
+                anyhow!("OpenCode cookie header missing. Set provider cookie_header.")
+            })?;
         let workspace_override = cfg
             .as_ref()
             .and_then(|c| c.workspace_id.clone())
@@ -53,7 +55,8 @@ impl Provider for OpenCodeProvider {
             fetch_workspace_id(&cookie, args.web_timeout).await?
         };
 
-        let subscription_text = fetch_subscription(&workspace_id, &cookie, args.web_timeout).await?;
+        let subscription_text =
+            fetch_subscription(&workspace_id, &cookie, args.web_timeout).await?;
         let usage = parse_opencode_usage(&subscription_text)?;
         Ok(self.ok_output("web", Some(usage)))
     }
@@ -166,8 +169,16 @@ async fn fetch_server_text(
     Ok(body)
 }
 
-fn server_request_url(base_url: &str, server_id: &str, args: Option<&Value>, method: &str) -> String {
-    let mut url = format!("{}/_server?x-ssr=1&x-sfn={}&x-sr=1&x-tt=0", base_url, server_id);
+fn server_request_url(
+    base_url: &str,
+    server_id: &str,
+    args: Option<&Value>,
+    method: &str,
+) -> String {
+    let mut url = format!(
+        "{}/_server?x-ssr=1&x-sfn={}&x-sr=1&x-tt=0",
+        base_url, server_id
+    );
     if method == "GET" {
         if let Some(args) = args {
             if let Ok(encoded) = serde_json::to_string(args) {
@@ -209,11 +220,22 @@ fn parse_opencode_usage(text: &str) -> Result<UsageSnapshot> {
 }
 
 fn parse_opencode_usage_from_text(text: &str) -> Option<UsageSnapshot> {
-    let rolling_percent = extract_double(r#"rollingUsage[^}]*usagePercent\s*:\s*([0-9]+(?:\.[0-9]+)?)"#, text)?;
+    let rolling_percent = extract_double(
+        r#"rollingUsage[^}]*usagePercent\s*:\s*([0-9]+(?:\.[0-9]+)?)"#,
+        text,
+    )?;
     let rolling_reset = extract_int(r#"rollingUsage[^}]*resetInSec\s*:\s*(\d+)"#, text)?;
-    let weekly_percent = extract_double(r#"weeklyUsage[^}]*usagePercent\s*:\s*([0-9]+(?:\.[0-9]+)?)"#, text)?;
+    let weekly_percent = extract_double(
+        r#"weeklyUsage[^}]*usagePercent\s*:\s*([0-9]+(?:\.[0-9]+)?)"#,
+        text,
+    )?;
     let weekly_reset = extract_int(r#"weeklyUsage[^}]*resetInSec\s*:\s*(\d+)"#, text)?;
-    Some(build_usage_snapshot(rolling_percent, weekly_percent, rolling_reset, weekly_reset))
+    Some(build_usage_snapshot(
+        rolling_percent,
+        weekly_percent,
+        rolling_reset,
+        weekly_reset,
+    ))
 }
 
 fn parse_opencode_usage_from_value(value: &Value) -> Option<UsageSnapshot> {
@@ -225,8 +247,14 @@ fn parse_opencode_usage_from_value(value: &Value) -> Option<UsageSnapshot> {
 
 fn find_usage_value(value: &Value) -> Option<UsageSnapshot> {
     if let Some(obj) = value.as_object() {
-        let rolling = obj.get("rollingUsage").or_else(|| obj.get("rolling")).or_else(|| obj.get("rolling_usage"));
-        let weekly = obj.get("weeklyUsage").or_else(|| obj.get("weekly")).or_else(|| obj.get("weekly_usage"));
+        let rolling = obj
+            .get("rollingUsage")
+            .or_else(|| obj.get("rolling"))
+            .or_else(|| obj.get("rolling_usage"));
+        let weekly = obj
+            .get("weeklyUsage")
+            .or_else(|| obj.get("weekly"))
+            .or_else(|| obj.get("weekly_usage"));
         if let (Some(rolling), Some(weekly)) = (rolling, weekly) {
             if let (Some(rp), Some(rr), Some(wp), Some(wr)) = (
                 rolling.get("usagePercent").and_then(|v| v.as_f64()),

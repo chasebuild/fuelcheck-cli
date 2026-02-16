@@ -2,8 +2,8 @@ use crate::cli::UsageArgs;
 use crate::config::Config;
 use crate::errors::CliError;
 use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot};
-use crate::providers::{env_var_nonempty, value_to_f64, Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use crate::providers::{Provider, ProviderId, SourcePreference, env_var_nonempty, value_to_f64};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::Value;
@@ -31,7 +31,9 @@ impl Provider for KimiK2Provider {
             .as_ref()
             .and_then(|c| c.api_key.clone())
             .or_else(|| env_var_nonempty(&["KIMI_K2_API_KEY", "KIMI_API_KEY", "KIMI_KEY"]))
-            .ok_or_else(|| anyhow!("Kimi K2 API key missing. Set provider api_key or KIMI_K2_API_KEY."))?;
+            .ok_or_else(|| {
+                anyhow!("Kimi K2 API key missing. Set provider api_key or KIMI_K2_API_KEY.")
+            })?;
 
         let selected = match source {
             SourcePreference::Auto => SourcePreference::Api,
@@ -64,35 +66,41 @@ impl Provider for KimiK2Provider {
 }
 
 fn map_kimi_k2_usage(json: &Value, headers: &reqwest::header::HeaderMap) -> Result<UsageSnapshot> {
-    let remaining = find_number(json, &[
-        "creditsRemaining",
-        "remainingCredits",
-        "remaining",
-        "credits_remaining",
-        "available",
-    ])
+    let remaining = find_number(
+        json,
+        &[
+            "creditsRemaining",
+            "remainingCredits",
+            "remaining",
+            "credits_remaining",
+            "available",
+        ],
+    )
     .or_else(|| {
         headers
             .get("X-Credits-Remaining")
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.parse::<f64>().ok())
     });
-    let consumed = find_number(json, &[
-        "creditsConsumed",
-        "consumed",
-        "used",
-        "credits_used",
-    ]);
-    let total = find_number(json, &["totalCredits", "total", "creditsTotal"])
-        .or_else(|| match (remaining, consumed) {
+    let consumed = find_number(
+        json,
+        &["creditsConsumed", "consumed", "used", "credits_used"],
+    );
+    let total = find_number(json, &["totalCredits", "total", "creditsTotal"]).or_else(|| {
+        match (remaining, consumed) {
             (Some(r), Some(c)) => Some(r + c),
             _ => None,
-        });
+        }
+    });
 
     let used_percent = if let (Some(c), Some(t)) = (consumed, total) {
         if t > 0.0 { Some((c / t) * 100.0) } else { None }
     } else if let (Some(r), Some(t)) = (remaining, total) {
-        if t > 0.0 { Some(((t - r) / t) * 100.0) } else { None }
+        if t > 0.0 {
+            Some(((t - r) / t) * 100.0)
+        } else {
+            None
+        }
     } else {
         None
     };

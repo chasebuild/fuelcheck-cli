@@ -2,8 +2,8 @@ use crate::cli::UsageArgs;
 use crate::config::Config;
 use crate::errors::CliError;
 use crate::model::{ProviderIdentitySnapshot, ProviderPayload, RateWindow, UsageSnapshot};
-use crate::providers::{env_var_nonempty, Provider, ProviderId, SourcePreference};
-use anyhow::{anyhow, Result};
+use crate::providers::{Provider, ProviderId, SourcePreference, env_var_nonempty};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use chrono::Utc;
 use serde::Deserialize;
@@ -31,7 +31,9 @@ impl Provider for CopilotProvider {
             .as_ref()
             .and_then(|c| c.api_key.clone())
             .or_else(|| env_var_nonempty(&["COPILOT_API_TOKEN", "GITHUB_TOKEN"]))
-            .ok_or_else(|| anyhow!("Copilot API token missing. Set provider api_key or COPILOT_API_TOKEN."))?;
+            .ok_or_else(|| {
+                anyhow!("Copilot API token missing. Set provider api_key or COPILOT_API_TOKEN.")
+            })?;
 
         let selected = match source {
             SourcePreference::Auto => SourcePreference::Api,
@@ -97,15 +99,12 @@ fn map_copilot_usage(response: CopilotUsageResponse) -> UsageSnapshot {
             resets_at: None,
             reset_description: None,
         });
-    let secondary = response
-        .quota_snapshots
-        .chat
-        .map(|snap| RateWindow {
-            used_percent: (100.0 - snap.percent_remaining).clamp(0.0, 100.0),
-            window_minutes: None,
-            resets_at: None,
-            reset_description: None,
-        });
+    let secondary = response.quota_snapshots.chat.map(|snap| RateWindow {
+        used_percent: (100.0 - snap.percent_remaining).clamp(0.0, 100.0),
+        window_minutes: None,
+        resets_at: None,
+        reset_description: None,
+    });
 
     let identity = ProviderIdentitySnapshot {
         provider_id: Some("copilot".to_string()),
