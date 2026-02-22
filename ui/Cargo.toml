@@ -14,4 +14,4 @@ crossterm = { workspace = true }
 ratatui = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-fuelcheck-core = { path = "../core" }
+fuelcheck-core = { path = "../core", version = "0.1.0" }
