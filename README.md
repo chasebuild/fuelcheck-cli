@@ -21,19 +21,24 @@ cargo install fuelcheck-cli
 
 Build from source:
 ```bash
-cargo build --release
+cargo build --release -p fuelcheck-cli
 ```
 The binary will be at `target/release/fuelcheck-cli`.
 
 Install locally:
 ```bash
-cargo install --path .
+cargo install --path cli
 ```
 
 Run directly during development:
 ```bash
-cargo run -- --help
+cargo run -p fuelcheck-cli -- --help
 ```
+
+**Workspace Layout**
+- `core/` (`fuelcheck-core`): provider integrations, config/domain models, cost/usage/report logic.
+- `cli/` (`fuelcheck-cli`): command parsing, orchestration, exit/error policy.
+- `ui/` (`fuelcheck-ui`): text renderers, report renderers, live TUI watch mode.
 
 **Quick Start**
 Create a config by detecting local credentials:

@@ -5,8 +5,8 @@ on:
   pull_request:
 
 jobs:
-  lint-build:
-    name: Lint, Format, Build
+  lint-build-test:
+    name: Lint, Format, Build, Test
     runs-on: ubuntu-latest
 
     steps:
@@ -26,3 +26,9 @@ jobs:
 
       - name: Build
         run: cargo build --workspace --all-features --locked
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features

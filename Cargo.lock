@@ -395,15 +395,26 @@ name = "fuelcheck-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
+ "clap",
+ "fuelcheck-core",
+ "fuelcheck-ui",
+ "reqwest",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "fuelcheck-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "async-trait",
  "base64",
  "chrono",
  "chrono-tz",
- "clap",
- "crossterm",
  "directories",
  "globwalk",
- "ratatui",
  "regex",
  "reqwest",
  "serde",
@@ -412,6 +423,20 @@ dependencies = [
  "tokio",
  "urlencoding",
  "uuid",
+]
+
+[[package]]
+name = "fuelcheck-ui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "chrono-tz",
+ "crossterm",
+ "fuelcheck-core",
+ "ratatui",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

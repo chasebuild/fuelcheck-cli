@@ -1,0 +1,20 @@
+[package]
+name = "fuelcheck-cli"
+version = "0.1.0"
+edition = "2024"
+description = "Rust CLI to fetch usage and cost data from multiple AI providers with CodexBar-compatible output."
+license = "MIT"
+repository = "https://github.com/chasebuild/fuelcheck-cli"
+homepage = "https://github.com/chasebuild/fuelcheck-cli"
+documentation = "https://github.com/chasebuild/fuelcheck-cli#readme"
+readme = "../README.md"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+fuelcheck-core = { path = "../core" }
+fuelcheck-ui = { path = "../ui" }

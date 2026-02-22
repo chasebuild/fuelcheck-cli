@@ -9,12 +9,12 @@ Thanks for helping improve Fuelcheck CLI. This guide covers the local dev setup,
 **Local Setup**
 Build the binary:
 ```bash
-cargo build
+cargo build --workspace
 ```
 
 Run the CLI in dev mode:
 ```bash
-cargo run -- --help
+cargo run -p fuelcheck-cli -- --help
 ```
 
 **Development Workflow**
@@ -25,23 +25,23 @@ cargo run -- --help
 **Style**
 Format and lint before submitting:
 ```bash
-cargo fmt
+cargo fmt --all
 cargo clippy --all-targets --all-features
 ```
 
 **Tests**
 Run the test suite:
 ```bash
-cargo test
+cargo test --workspace
 ```
 If you add provider integrations that require live credentials, keep tests unit-level and avoid network calls where possible.
 
 **Adding a Provider**
 Checklist for a new provider implementation:
-- Add a new provider module in `src/providers/`.
-- Update `ProviderId` and `ProviderSelector` in `src/providers/mod.rs`.
-- Register the provider in `ProviderRegistry::new` in `src/providers/mod.rs`.
-- Add any required config fields to `src/config.rs` if needed.
+- Add a new provider module in `core/src/providers/`.
+- Update `ProviderId` and `ProviderSelector` in `core/src/providers/mod.rs`.
+- Register the provider in `ProviderRegistry::new` in `core/src/providers/mod.rs`.
+- Add any required config fields to `core/src/config.rs` if needed.
 - Ensure `fuelcheck-cli usage --provider <id>` works for the new provider.
 
 **Reporting Issues**
