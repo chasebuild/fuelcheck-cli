@@ -5,6 +5,7 @@ mod errors;
 mod logger;
 mod model;
 mod providers;
+mod reports;
 mod tui;
 
 use anyhow::Result;

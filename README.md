@@ -9,6 +9,7 @@ Fuelcheck CLI is a Rust command-line tool that fetches usage and cost data from 
 - Multi-provider usage checks with optional status badges.
 - JSON and JSON-only output for automation.
 - Local cost scan for supported providers.
+- Codex local session analytics (`daily`, `monthly`, `session`) via `cost --report`.
 - Live TUI watch mode for continuous refresh.
 - Configurable sources per provider (oauth, web, api, cli, local).
 
@@ -53,6 +54,23 @@ fuelcheck-cli usage --provider codex --format json --pretty
 Compute local cost totals (from local logs when available):
 ```bash
 fuelcheck-cli cost --provider codex
+```
+
+Compute Codex local reports from `CODEX_HOME/sessions` (or `~/.codex/sessions`):
+```bash
+fuelcheck-cli cost --report daily --provider codex
+fuelcheck-cli cost --report monthly --provider codex --since 20250901 --until 20250930
+fuelcheck-cli cost --report session --provider codex --timezone America/New_York
+```
+
+JSON report output (single provider keeps ccusage-style top-level keys):
+```bash
+fuelcheck-cli cost --report daily --provider codex --json --pretty
+```
+
+JSON report output (multiple providers returns provider wrapper):
+```bash
+fuelcheck-cli cost --report daily --provider codex --provider claude --json --pretty
 ```
 
 Run the live watch TUI:
@@ -134,6 +152,7 @@ Use `--provider` multiple times or `--provider all` to query more than one.
 - Use `--json-only` to suppress all non-JSON output.
 - Use `--json-output` to emit JSONL logs on stderr.
 - `--watch` requires text output.
+- `cost --report` currently implements Codex local reports; unsupported providers return provider-level errors in output.
 
 **Provider Setup (from CodexBar docs)**
 Fuelcheck CLI uses the same credentials and tokens described in CodexBar provider docs. For cookie-based providers, you must supply a raw `Cookie:` header. A quick way to capture it is:

@@ -3,6 +3,8 @@ use crate::errors::CliError;
 use crate::logger::{self, LogLevel};
 use crate::model::{ErrorKind, OutputFormat, ProviderErrorPayload, ProviderPayload};
 use crate::providers::{ProviderId, ProviderRegistry, ProviderSelector, SourcePreference};
+use crate::reports;
+use crate::reports::types::CostReportKind;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde_json::json;
@@ -120,6 +122,21 @@ pub struct CostArgs {
     /// Pretty-print JSON output.
     #[arg(long)]
     pub pretty: bool,
+    /// Group local usage by report type (codex session logs).
+    #[arg(long)]
+    pub report: Option<CostReportKind>,
+    /// Filter from date (YYYYMMDD or YYYY-MM-DD).
+    #[arg(long)]
+    pub since: Option<String>,
+    /// Filter until date (inclusive).
+    #[arg(long)]
+    pub until: Option<String>,
+    /// Timezone for report date grouping (IANA).
+    #[arg(long)]
+    pub timezone: Option<String>,
+    /// Force compact table layout for report text output.
+    #[arg(long)]
+    pub compact: bool,
     /// JSON output only (no extra text).
     // NOTE: json_only is global.
     /// Explicit config path.
@@ -347,6 +364,41 @@ pub async fn run_cost(
     if args.json || global.json_only {
         args.format = OutputFormat::Json;
     }
+
+    if let Some(report_kind) = args.report {
+        let provider_ids = collect_report_provider_ids(&args);
+        let report_collection =
+            reports::build_cost_report_collection(reports::CostReportRequest {
+                report: report_kind,
+                providers: provider_ids,
+                since: args.since.as_deref(),
+                until: args.until.as_deref(),
+                timezone: args.timezone.as_deref(),
+            })?;
+
+        if args.format == OutputFormat::Json || global.json_only {
+            let value = reports::collection_to_json_value(&report_collection)?;
+            if args.pretty {
+                println!("{}", serde_json::to_string_pretty(&value)?);
+            } else {
+                println!("{}", serde_json::to_string(&value)?);
+            }
+            return Ok(());
+        }
+
+        if !global.json_only {
+            println!(
+                "{}",
+                reports::render_collection_text(
+                    &report_collection,
+                    args.compact,
+                    args.timezone.as_deref()
+                )
+            );
+        }
+        return Ok(());
+    }
+
     let provider_ids = if args.providers.is_empty() {
         config.enabled_providers_or_default()
     } else {
@@ -427,6 +479,13 @@ pub async fn run_cost(
         outputs,
         &prefs,
     )
+}
+
+fn collect_report_provider_ids(args: &CostArgs) -> Vec<ProviderId> {
+    if args.providers.is_empty() {
+        return vec![ProviderId::Codex];
+    }
+    crate::providers::expand_provider_selectors(&args.providers)
 }
 
 #[derive(Parser, Debug)]
@@ -1159,6 +1218,77 @@ fn format_error_chain(err: &anyhow::Error) -> String {
 mod tests {
     use super::*;
     use crate::model::{ProviderStatusIndicator, ProviderStatusPayload, RateWindow, UsageSnapshot};
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    struct TempDirGuard {
+        path: PathBuf,
+    }
+
+    impl TempDirGuard {
+        fn new() -> Self {
+            let path =
+                std::env::temp_dir().join(format!("fuelcheck-cli-tests-{}", uuid::Uuid::new_v4()));
+            fs::create_dir_all(&path).expect("create temp dir");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    struct EnvVarGuard {
+        key: String,
+        prev: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &str, value: &str) -> Self {
+            let prev = std::env::var(key).ok();
+            // SAFETY: tests mutate process env in a scoped guard and restore it on Drop.
+            unsafe {
+                std::env::set_var(key, value);
+            }
+            Self {
+                key: key.to_string(),
+                prev,
+            }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.prev {
+                Some(value) => {
+                    // SAFETY: restoring environment state during test teardown.
+                    unsafe {
+                        std::env::set_var(&self.key, value);
+                    }
+                }
+                None => {
+                    // SAFETY: restoring environment state during test teardown.
+                    unsafe {
+                        std::env::remove_var(&self.key);
+                    }
+                }
+            }
+        }
+    }
+
+    fn write_codex_session(base: &Path, relative_path: &str, content: &str) {
+        let path = base.join("sessions").join(relative_path);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("create parent directories");
+        }
+        fs::write(path, content).expect("write codex session");
+    }
 
     #[test]
     fn renders_codexbar_style_text() {
@@ -1232,5 +1362,102 @@ mod tests {
         ]
         .join("\n");
         assert_eq!(text, expected);
+    }
+
+    #[test]
+    fn report_mode_defaults_to_codex_when_provider_is_omitted() {
+        let args = CostArgs {
+            providers: Vec::new(),
+            format: OutputFormat::Json,
+            json: true,
+            pretty: false,
+            report: Some(CostReportKind::Daily),
+            since: None,
+            until: None,
+            timezone: None,
+            compact: false,
+            config: None,
+        };
+
+        let providers = collect_report_provider_ids(&args);
+        assert_eq!(providers, vec![ProviderId::Codex]);
+    }
+
+    #[test]
+    fn report_json_single_provider_uses_ccusage_shape() {
+        let _lock = crate::reports::codex::CODEX_ENV_TEST_MUTEX
+            .lock()
+            .expect("lock env mutex");
+        let temp = TempDirGuard::new();
+        write_codex_session(
+            temp.path(),
+            "project/s1.jsonl",
+            &[
+                r#"{"timestamp":"2025-09-11T10:00:00.000Z","type":"turn_context","payload":{"model":"gpt-5"}}"#,
+                r#"{"timestamp":"2025-09-11T10:00:10.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":1000,"cached_input_tokens":100,"output_tokens":500,"reasoning_output_tokens":0,"total_tokens":1500}}}}"#,
+            ]
+            .join("\n"),
+        );
+        let _guard = EnvVarGuard::set("CODEX_HOME", &temp.path().display().to_string());
+
+        let collection = reports::build_cost_report_collection(reports::CostReportRequest {
+            report: CostReportKind::Daily,
+            providers: vec![ProviderId::Codex],
+            since: None,
+            until: None,
+            timezone: Some("UTC"),
+        })
+        .expect("build report collection");
+        let value = reports::collection_to_json_value(&collection).expect("serialize report");
+
+        assert!(value.get("daily").is_some());
+        assert!(value.get("totals").is_some());
+        assert!(value.get("providers").is_none());
+    }
+
+    #[test]
+    fn report_json_multi_provider_wraps_results_and_errors() {
+        let _lock = crate::reports::codex::CODEX_ENV_TEST_MUTEX
+            .lock()
+            .expect("lock env mutex");
+        let temp = TempDirGuard::new();
+        write_codex_session(
+            temp.path(),
+            "project/s2.jsonl",
+            &[
+                r#"{"timestamp":"2025-09-11T10:00:00.000Z","type":"turn_context","payload":{"model":"gpt-5"}}"#,
+                r#"{"timestamp":"2025-09-11T10:00:10.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"cached_input_tokens":0,"output_tokens":50,"reasoning_output_tokens":0,"total_tokens":150}}}}"#,
+            ]
+            .join("\n"),
+        );
+        let _guard = EnvVarGuard::set("CODEX_HOME", &temp.path().display().to_string());
+
+        let collection = reports::build_cost_report_collection(reports::CostReportRequest {
+            report: CostReportKind::Daily,
+            providers: vec![ProviderId::Codex, ProviderId::Claude],
+            since: None,
+            until: None,
+            timezone: Some("UTC"),
+        })
+        .expect("build report collection");
+        let value = reports::collection_to_json_value(&collection).expect("serialize report");
+
+        assert_eq!(value.get("report").and_then(|v| v.as_str()), Some("daily"));
+        let providers = value
+            .get("providers")
+            .and_then(|v| v.as_object())
+            .expect("providers object");
+        assert!(
+            providers
+                .get("codex")
+                .and_then(|v| v.get("daily"))
+                .is_some()
+        );
+        assert!(
+            providers
+                .get("claude")
+                .and_then(|v| v.get("error"))
+                .is_some()
+        );
     }
 }
